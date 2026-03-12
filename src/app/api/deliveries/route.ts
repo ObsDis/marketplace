@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 import { db } from "@/lib/db";
 import { getSession } from "@/lib/auth";
+import { sendDeliveryPosted } from "@/lib/email";
 import { PackageSize, DeliveryStatus } from "@/generated/prisma";
 
 const createDeliverySchema = z.object({
@@ -121,6 +122,9 @@ export async function POST(request: Request) {
         paymentStatus: parsed.paymentIntentId ? "PAID" : "UNPAID",
       },
     });
+
+    // Fire-and-forget: notify customer that their delivery was posted
+    sendDeliveryPosted(session.user.email, delivery.title);
 
     return NextResponse.json(delivery, { status: 201 });
   } catch (error) {

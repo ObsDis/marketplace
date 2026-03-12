@@ -2,6 +2,12 @@ import { NextResponse } from "next/server";
 import { db } from "@/lib/db";
 import { getSession } from "@/lib/auth";
 import { stripe } from "@/lib/stripe";
+import {
+  sendDeliveryAccepted,
+  sendDeliveryPickedUp,
+  sendDeliveryCompleted,
+  sendDeliveryCancelled,
+} from "@/lib/email";
 import { DeliveryStatus, SubStatus } from "@/generated/prisma";
 
 // Stripe's standard CC processing fee — passed through, not profit.
@@ -109,6 +115,12 @@ export async function PATCH(
         },
       });
 
+      // Fire-and-forget: notify customer of cancellation
+      const cancelCustomer = await db.user.findUnique({ where: { id: delivery.customerId } });
+      if (cancelCustomer?.email) {
+        sendDeliveryCancelled(cancelCustomer.email, delivery.title);
+      }
+
       return NextResponse.json(updated);
     }
 
@@ -154,6 +166,12 @@ export async function PATCH(
           driverId: driver.id,
         },
       });
+
+      // Fire-and-forget: notify customer that a driver accepted
+      const acceptCustomer = await db.user.findUnique({ where: { id: delivery.customerId } });
+      if (acceptCustomer?.email) {
+        sendDeliveryAccepted(acceptCustomer.email, driver.displayName, delivery.title);
+      }
 
       return NextResponse.json(updated);
     }
@@ -230,6 +248,21 @@ export async function PATCH(
           where: { id: driver.id },
           data: { totalDeliveries: { increment: 1 } },
         });
+      }
+
+      // Fire-and-forget: send status notification emails
+      const statusCustomer = await db.user.findUnique({ where: { id: delivery.customerId } });
+      if (status === DeliveryStatus.PICKED_UP && statusCustomer?.email) {
+        sendDeliveryPickedUp(statusCustomer.email, delivery.title);
+      }
+      if (status === DeliveryStatus.DELIVERED && statusCustomer?.email) {
+        const driverUser = await db.user.findUnique({ where: { id: driver.userId } });
+        sendDeliveryCompleted(
+          statusCustomer.email,
+          driverUser?.email ?? "",
+          delivery.title,
+          delivery.price
+        );
       }
 
       return NextResponse.json(updated);
