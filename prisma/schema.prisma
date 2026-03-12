@@ -1,0 +1,356 @@
+generator client {
+  provider = "prisma-client"
+  output   = "../src/generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+// ─── Auth & Users ───────────────────────────────────────────
+
+model User {
+  id             String    @id @default(cuid())
+  name           String?
+  email          String    @unique
+  emailVerified  DateTime?
+  hashedPassword String?
+  image          String?
+  role           UserRole  @default(CUSTOMER)
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+
+  accounts Account[]
+  sessions Session[]
+  merchant Merchant?
+  orders   Order[]
+  rides    Ride[]      @relation("RidePassenger")
+  reviews  Review[]
+
+  @@map("users")
+}
+
+model Account {
+  id                String  @id @default(cuid())
+  userId            String
+  type              String
+  provider          String
+  providerAccountId String
+  refresh_token     String? @db.Text
+  access_token      String? @db.Text
+  expires_at        Int?
+  token_type        String?
+  scope             String?
+  id_token          String? @db.Text
+  session_state     String?
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([provider, providerAccountId])
+  @@map("accounts")
+}
+
+model Session {
+  id           String   @id @default(cuid())
+  sessionToken String   @unique
+  userId       String
+  expires      DateTime
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("sessions")
+}
+
+model VerificationToken {
+  identifier String
+  token      String   @unique
+  expires    DateTime
+
+  @@unique([identifier, token])
+  @@map("verification_tokens")
+}
+
+enum UserRole {
+  CUSTOMER
+  MERCHANT
+  ADMIN
+}
+
+// ─── Merchant / Subscription ────────────────────────────────
+
+model Merchant {
+  id                 String         @id @default(cuid())
+  userId             String         @unique
+  businessName       String
+  description        String?        @db.Text
+  logo               String?
+  industry           Industry
+  stripeAccountId    String?        @unique
+  stripeAccountReady Boolean        @default(false)
+  subscriptionId     String?        @unique
+  subscriptionStatus SubStatus      @default(INACTIVE)
+  phone              String?
+  address            String?
+  city               String?
+  state              String?
+  zip                String?
+  verified           Boolean        @default(false)
+  createdAt          DateTime       @default(now())
+  updatedAt          DateTime       @updatedAt
+
+  user       User        @relation(fields: [userId], references: [id], onDelete: Cascade)
+  products   Product[]
+  shipments  Shipment[]
+  rideConfig RideConfig?
+  brokerageListings BrokerageListing[]
+  reviews    Review[]
+
+  @@map("merchants")
+}
+
+enum Industry {
+  ECOMMERCE
+  LOGISTICS
+  RIDESHARE
+  BROKERAGE
+}
+
+enum SubStatus {
+  ACTIVE
+  INACTIVE
+  PAST_DUE
+  CANCELLED
+}
+
+// ─── E-Commerce ─────────────────────────────────────────────
+
+model Product {
+  id          String        @id @default(cuid())
+  merchantId  String
+  name        String
+  description String?       @db.Text
+  price       Float
+  images      String[]
+  category    String?
+  digital     Boolean       @default(false)
+  downloadUrl String?
+  inventory   Int           @default(0)
+  active      Boolean       @default(true)
+  createdAt   DateTime      @default(now())
+  updatedAt   DateTime      @updatedAt
+
+  merchant   Merchant    @relation(fields: [merchantId], references: [id], onDelete: Cascade)
+  orderItems OrderItem[]
+
+  @@map("products")
+}
+
+model Order {
+  id              String      @id @default(cuid())
+  customerId      String
+  stripePaymentId String?     @unique
+  status          OrderStatus @default(PENDING)
+  total           Float
+  createdAt       DateTime    @default(now())
+  updatedAt       DateTime    @updatedAt
+
+  customer User        @relation(fields: [customerId], references: [id])
+  items    OrderItem[]
+
+  @@map("orders")
+}
+
+model OrderItem {
+  id         String @id @default(cuid())
+  orderId    String
+  productId  String
+  quantity   Int
+  unitPrice  Float
+
+  order   Order   @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  product Product @relation(fields: [productId], references: [id])
+
+  @@map("order_items")
+}
+
+enum OrderStatus {
+  PENDING
+  PAID
+  SHIPPED
+  DELIVERED
+  CANCELLED
+  REFUNDED
+}
+
+// ─── Logistics ──────────────────────────────────────────────
+
+model Shipment {
+  id            String          @id @default(cuid())
+  merchantId    String
+  title         String
+  description   String?         @db.Text
+  pickupAddress String
+  pickupCity    String
+  pickupState   String
+  pickupZip     String
+  dropAddress   String
+  dropCity      String
+  dropState     String
+  dropZip       String
+  weight        Float?
+  vehicleType   VehicleType     @default(VAN)
+  price         Float
+  status        ShipmentStatus  @default(POSTED)
+  driverName    String?
+  driverPhone   String?
+  trackingNote  String?
+  pickedUpAt    DateTime?
+  deliveredAt   DateTime?
+  createdAt     DateTime        @default(now())
+  updatedAt     DateTime        @updatedAt
+
+  merchant Merchant @relation(fields: [merchantId], references: [id], onDelete: Cascade)
+
+  @@map("shipments")
+}
+
+enum VehicleType {
+  VAN
+  BOX_TRUCK
+  SEMI
+  FLATBED
+}
+
+enum ShipmentStatus {
+  POSTED
+  ACCEPTED
+  PICKED_UP
+  IN_TRANSIT
+  DELIVERED
+  CANCELLED
+}
+
+// ─── Ride Share ─────────────────────────────────────────────
+
+model RideConfig {
+  id          String  @id @default(cuid())
+  merchantId  String  @unique
+  baseFare    Float   @default(2.50)
+  perMileRate Float   @default(1.50)
+  perMinRate  Float   @default(0.25)
+  surgeMultiplier Float @default(1.0)
+  serviceArea String?
+
+  merchant Merchant @relation(fields: [merchantId], references: [id], onDelete: Cascade)
+
+  @@map("ride_configs")
+}
+
+model Ride {
+  id             String     @id @default(cuid())
+  passengerId    String
+  pickupAddress  String
+  pickupLat      Float?
+  pickupLng      Float?
+  dropoffAddress String
+  dropoffLat     Float?
+  dropoffLng     Float?
+  estimatedFare  Float
+  finalFare      Float?
+  distance       Float?
+  duration       Int?
+  status         RideStatus @default(REQUESTED)
+  driverName     String?
+  driverPhone    String?
+  vehicleInfo    String?
+  requestedAt    DateTime   @default(now())
+  acceptedAt     DateTime?
+  completedAt    DateTime?
+
+  passenger User @relation("RidePassenger", fields: [passengerId], references: [id])
+
+  @@map("rides")
+}
+
+enum RideStatus {
+  REQUESTED
+  ACCEPTED
+  DRIVER_EN_ROUTE
+  IN_PROGRESS
+  COMPLETED
+  CANCELLED
+}
+
+// ─── Business Brokerage ─────────────────────────────────────
+
+model BrokerageListing {
+  id              String          @id @default(cuid())
+  merchantId      String
+  businessName    String
+  industry        String
+  description     String          @db.Text
+  askingPrice     Float
+  annualRevenue   Float?
+  annualProfit    Float?
+  employeeCount   Int?
+  yearEstablished Int?
+  location        String?
+  images          String[]
+  status          ListingStatus   @default(ACTIVE)
+  ndaRequired     Boolean         @default(true)
+  createdAt       DateTime        @default(now())
+  updatedAt       DateTime        @updatedAt
+
+  merchant Merchant      @relation(fields: [merchantId], references: [id], onDelete: Cascade)
+  inquiries BrokerageInquiry[]
+
+  @@map("brokerage_listings")
+}
+
+model BrokerageInquiry {
+  id          String        @id @default(cuid())
+  listingId   String
+  name        String
+  email       String
+  phone       String?
+  message     String        @db.Text
+  ndaSigned   Boolean       @default(false)
+  status      InquiryStatus @default(NEW)
+  createdAt   DateTime      @default(now())
+
+  listing BrokerageListing @relation(fields: [listingId], references: [id], onDelete: Cascade)
+
+  @@map("brokerage_inquiries")
+}
+
+enum ListingStatus {
+  ACTIVE
+  UNDER_CONTRACT
+  SOLD
+  WITHDRAWN
+}
+
+enum InquiryStatus {
+  NEW
+  REVIEWED
+  NDA_SENT
+  NDA_SIGNED
+  IN_DISCUSSION
+  CLOSED
+}
+
+// ─── Reviews ────────────────────────────────────────────────
+
+model Review {
+  id         String   @id @default(cuid())
+  userId     String
+  merchantId String
+  rating     Int
+  comment    String?  @db.Text
+  createdAt  DateTime @default(now())
+
+  user     User     @relation(fields: [userId], references: [id])
+  merchant Merchant @relation(fields: [merchantId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, merchantId])
+  @@map("reviews")
+}
