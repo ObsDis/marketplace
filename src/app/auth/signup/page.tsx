@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { signIn } from "next-auth/react";
+import { createClient } from "@/lib/supabase/client";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 
@@ -45,7 +45,36 @@ export default function SignUpPage() {
     setLoading(true);
 
     try {
-      const body: Record<string, string> = { name, email, password, role };
+      const supabase = createClient();
+      const { data, error: signUpError } = await supabase.auth.signUp({
+        email,
+        password,
+        options: {
+          data: {
+            name,
+            role,
+            industry: isMerchant ? industry : undefined,
+            businessName: isMerchant ? businessName : undefined,
+          },
+        },
+      });
+
+      if (signUpError) {
+        setError(signUpError.message);
+        return;
+      }
+
+      if (!data.user) {
+        setError("Registration failed. Please try again.");
+        return;
+      }
+
+      const body: Record<string, string> = {
+        supabaseUserId: data.user.id,
+        name,
+        email,
+        role,
+      };
       if (isMerchant) {
         body.industry = industry;
         body.businessName = businessName;
@@ -57,21 +86,10 @@ export default function SignUpPage() {
         body: JSON.stringify(body),
       });
 
-      const data = await res.json();
+      const resData = await res.json();
 
       if (!res.ok) {
-        setError(data.error || "Registration failed. Please try again.");
-        return;
-      }
-
-      const result = await signIn("credentials", {
-        email,
-        password,
-        redirect: false,
-      });
-
-      if (result?.error) {
-        setError("Account created but sign-in failed. Please sign in manually.");
+        setError(resData.error || "Registration failed. Please try again.");
         return;
       }
 

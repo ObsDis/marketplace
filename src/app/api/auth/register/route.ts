@@ -1,13 +1,12 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
-import bcrypt from "bcryptjs";
 import { db } from "@/lib/db";
 import { UserRole, Industry } from "@/generated/prisma";
 
 const registerSchema = z.object({
+  supabaseUserId: z.string().min(1, "Supabase user ID is required"),
   name: z.string().min(1, "Name is required"),
   email: z.string().email("Invalid email address"),
-  password: z.string().min(8, "Password must be at least 8 characters"),
   role: z.nativeEnum(UserRole),
   industry: z.nativeEnum(Industry).optional(),
   businessName: z.string().optional(),
@@ -18,7 +17,7 @@ export async function POST(request: Request) {
     const body = await request.json();
     const parsed = registerSchema.parse(body);
 
-    const { name, email, password, role, industry, businessName } = parsed;
+    const { supabaseUserId, name, email, role, industry, businessName } = parsed;
 
     if (role === UserRole.MERCHANT && !businessName?.trim()) {
       return NextResponse.json(
@@ -38,13 +37,11 @@ export async function POST(request: Request) {
       );
     }
 
-    const hashedPassword = await bcrypt.hash(password, 10);
-
     const user = await db.user.create({
       data: {
+        id: supabaseUserId,
         name,
         email,
-        hashedPassword,
         role,
         ...(role === UserRole.MERCHANT && {
           merchant: {

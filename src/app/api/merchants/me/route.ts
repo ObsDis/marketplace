@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
 import { db } from "@/lib/db";
-import { getServerSession } from "@/lib/auth";
+import { getSession } from "@/lib/auth";
 
 const updateMerchantSchema = z.object({
   businessName: z.string().min(1).optional(),
@@ -15,7 +15,7 @@ const updateMerchantSchema = z.object({
 
 export async function GET() {
   try {
-    const session = await getServerSession();
+    const session = await getSession();
     if (!session?.user?.id) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
@@ -38,7 +38,7 @@ export async function GET() {
 
 export async function PATCH(request: Request) {
   try {
-    const session = await getServerSession();
+    const session = await getSession();
     if (!session?.user?.id) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }

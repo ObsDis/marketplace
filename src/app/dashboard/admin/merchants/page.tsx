@@ -1,4 +1,4 @@
-import { getServerSession } from "@/lib/auth";
+import { getSession } from "@/lib/auth";
 import { redirect } from "next/navigation";
 import { db } from "@/lib/db";
 import Link from "next/link";
@@ -20,7 +20,7 @@ interface PageProps {
 }
 
 export default async function AdminMerchantsPage({ searchParams }: PageProps) {
-  const session = await getServerSession();
+  const session = await getSession();
   if (!session?.user || session.user.role !== "ADMIN") {
     redirect("/");
   }

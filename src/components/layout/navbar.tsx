@@ -1,10 +1,12 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import Link from "next/link";
-import { useSession, signOut } from "next-auth/react";
+import { useRouter } from "next/navigation";
+import { createClient } from "@/lib/supabase/client";
 import { Menu, X, ChevronDown } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import type { User } from "@supabase/supabase-js";
 
 const marketplaceLinks = [
   { label: "E-Commerce", href: "/marketplace/e-commerce" },
@@ -14,9 +16,38 @@ const marketplaceLinks = [
 ];
 
 export function Navbar() {
-  const { data: session } = useSession();
+  const router = useRouter();
+  const [user, setUser] = useState<User | null>(null);
   const [mobileOpen, setMobileOpen] = useState(false);
   const [dropdownOpen, setDropdownOpen] = useState(false);
+
+  useEffect(() => {
+    const supabase = createClient();
+
+    supabase.auth.getUser().then(({ data: { user } }) => {
+      setUser(user);
+    });
+
+    const {
+      data: { subscription },
+    } = supabase.auth.onAuthStateChange((_event, session) => {
+      setUser(session?.user ?? null);
+    });
+
+    return () => {
+      subscription.unsubscribe();
+    };
+  }, []);
+
+  const handleSignOut = async () => {
+    const supabase = createClient();
+    await supabase.auth.signOut();
+    router.push("/");
+    router.refresh();
+  };
+
+  const displayName =
+    user?.user_metadata?.name || user?.email || "";
 
   return (
     <nav className="sticky top-0 z-40 w-full border-b bg-white shadow-sm">
@@ -64,10 +95,10 @@ export function Navbar() {
 
         {/* Desktop right side */}
         <div className="hidden items-center gap-3 md:flex">
-          {session?.user ? (
+          {user ? (
             <>
               <span className="text-sm text-gray-700">
-                {session.user.name || session.user.email}
+                {displayName}
               </span>
               <Link href="/dashboard">
                 <Button variant="outline" size="sm">
@@ -77,7 +108,7 @@ export function Navbar() {
               <Button
                 variant="secondary"
                 size="sm"
-                onClick={() => signOut()}
+                onClick={handleSignOut}
               >
                 Sign Out
               </Button>
@@ -137,10 +168,10 @@ export function Navbar() {
           </div>
 
           <div className="mt-4 flex flex-col gap-2 border-t pt-4">
-            {session?.user ? (
+            {user ? (
               <>
                 <span className="px-3 text-sm text-gray-700">
-                  {session.user.name || session.user.email}
+                  {displayName}
                 </span>
                 <Link href="/dashboard" onClick={() => setMobileOpen(false)}>
                   <Button variant="outline" size="sm" className="w-full">
@@ -151,7 +182,7 @@ export function Navbar() {
                   variant="secondary"
                   size="sm"
                   className="w-full"
-                  onClick={() => signOut()}
+                  onClick={handleSignOut}
                 >
                   Sign Out
                 </Button>

@@ -1,4 +1,4 @@
-import { getServerSession } from "@/lib/auth";
+import { getSession } from "@/lib/auth";
 import { redirect } from "next/navigation";
 import { db } from "@/lib/db";
 import Link from "next/link";
@@ -17,7 +17,7 @@ import {
 export const dynamic = "force-dynamic";
 
 export default async function AdminDashboard() {
-  const session = await getServerSession();
+  const session = await getSession();
   if (!session?.user || session.user.role !== "ADMIN") {
     redirect("/");
   }

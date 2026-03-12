@@ -1,4 +1,4 @@
-import { getServerSession } from "@/lib/auth";
+import { getSession } from "@/lib/auth";
 import { redirect } from "next/navigation";
 import { db } from "@/lib/db";
 import Link from "next/link";
@@ -6,7 +6,7 @@ import Link from "next/link";
 export const dynamic = "force-dynamic";
 
 export default async function ProductsPage() {
-  const session = await getServerSession();
+  const session = await getSession();
   if (!session?.user) redirect("/auth/signin");
 
   const merchant = await db.merchant.findUnique({

@@ -1,75 +1,27 @@
-import { NextAuthOptions } from "next-auth";
-import { getServerSession as nextAuthGetServerSession } from "next-auth";
-import CredentialsProvider from "next-auth/providers/credentials";
-import { PrismaAdapter } from "@auth/prisma-adapter";
-import bcrypt from "bcryptjs";
+import { createClient } from "@/lib/supabase/server";
 import { db } from "@/lib/db";
-import { UserRole } from "@/generated/prisma";
 
-export const authOptions: NextAuthOptions = {
-  adapter: PrismaAdapter(db) as NextAuthOptions["adapter"],
-  session: {
-    strategy: "jwt",
-  },
-  providers: [
-    CredentialsProvider({
-      name: "credentials",
-      credentials: {
-        email: { label: "Email", type: "email" },
-        password: { label: "Password", type: "password" },
-      },
-      async authorize(credentials) {
-        if (!credentials?.email || !credentials?.password) {
-          throw new Error("Email and password are required");
-        }
+export async function getSession() {
+  const supabase = await createClient();
+  const { data: { user } } = await supabase.auth.getUser();
 
-        const user = await db.user.findUnique({
-          where: { email: credentials.email },
-        });
+  if (!user) return null;
 
-        if (!user || !user.hashedPassword) {
-          throw new Error("Invalid credentials");
-        }
+  // Fetch the full user from our DB with role info
+  const dbUser = await db.user.findUnique({
+    where: { id: user.id },
+    include: { merchant: true },
+  });
 
-        const isPasswordValid = await bcrypt.compare(
-          credentials.password,
-          user.hashedPassword
-        );
+  if (!dbUser) return null;
 
-        if (!isPasswordValid) {
-          throw new Error("Invalid credentials");
-        }
-
-        return {
-          id: user.id,
-          email: user.email,
-          name: user.name,
-          role: user.role,
-        };
-      },
-    }),
-  ],
-  callbacks: {
-    async jwt({ token, user }) {
-      if (user) {
-        token.id = user.id;
-        token.role = (user as { role: UserRole }).role;
-      }
-      return token;
+  return {
+    user: {
+      id: dbUser.id,
+      email: dbUser.email,
+      name: dbUser.name,
+      role: dbUser.role,
+      merchant: dbUser.merchant,
     },
-    async session({ session, token }) {
-      if (session.user) {
-        session.user.id = token.id as string;
-        session.user.role = token.role as UserRole;
-      }
-      return session;
-    },
-  },
-  pages: {
-    signIn: "/login",
-  },
-};
-
-export async function getServerSession() {
-  return nextAuthGetServerSession(authOptions);
+  };
 }

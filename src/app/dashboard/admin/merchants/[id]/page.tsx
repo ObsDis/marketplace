@@ -1,4 +1,4 @@
-import { getServerSession } from "@/lib/auth";
+import { getSession } from "@/lib/auth";
 import { redirect, notFound } from "next/navigation";
 import { db } from "@/lib/db";
 import Link from "next/link";
@@ -29,7 +29,7 @@ interface PageProps {
 }
 
 export default async function AdminMerchantDetailPage({ params }: PageProps) {
-  const session = await getServerSession();
+  const session = await getSession();
   if (!session?.user || session.user.role !== "ADMIN") {
     redirect("/");
   }
@@ -412,7 +412,7 @@ export default async function AdminMerchantDetailPage({ params }: PageProps) {
                 <form
                   action={async () => {
                     "use server";
-                    const { getServerSession: getSession } = await import(
+                    const { getSession } = await import(
                       "@/lib/auth"
                     );
                     const { redirect: serverRedirect } = await import(
