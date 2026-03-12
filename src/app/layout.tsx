@@ -16,9 +16,9 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "MarketHub - Your Multi-Industry Marketplace",
+  title: "Sprint Cargo - The Fair Delivery Platform",
   description:
-    "Join MarketHub for a flat $99/month. Sell products, manage deliveries, launch ride services, and broker businesses — all on one platform. Set your own prices and keep 100% of your sales.",
+    "The fair delivery platform. $99.99/mo for drivers. Zero commission. Post deliveries, claim routes, and keep 100% of your earnings.",
 };
 
 export default function RootLayout({

@@ -10,7 +10,7 @@ export async function getSession() {
   // Fetch the full user from our DB with role info
   const dbUser = await db.user.findUnique({
     where: { id: user.id },
-    include: { merchant: true },
+    include: { driver: true },
   });
 
   if (!dbUser) return null;
@@ -21,7 +21,7 @@ export async function getSession() {
       email: dbUser.email,
       name: dbUser.name,
       role: dbUser.role,
-      merchant: dbUser.merchant,
+      driver: dbUser.driver,
     },
   };
 }

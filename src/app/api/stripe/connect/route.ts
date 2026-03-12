@@ -11,47 +11,47 @@ export async function POST() {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
-    if (session.user.role !== "MERCHANT") {
+    if (session.user.role !== "DRIVER") {
       return NextResponse.json(
-        { error: "Only merchants can connect Stripe accounts" },
+        { error: "Only drivers can connect Stripe accounts" },
         { status: 403 }
       );
     }
 
-    const merchant = await db.merchant.findUnique({
+    const driver = await db.driver.findUnique({
       where: { userId: session.user.id },
     });
 
-    if (!merchant) {
+    if (!driver) {
       return NextResponse.json(
-        { error: "Merchant profile not found" },
+        { error: "Driver profile not found" },
         { status: 404 }
       );
     }
 
-    let stripeAccountId = merchant.stripeAccountId;
+    let stripeAccountId = driver.stripeAccountId;
 
     if (!stripeAccountId) {
       const account = await stripe.accounts.create({
         type: "express",
         email: session.user.email!,
         metadata: {
-          merchantId: merchant.id,
+          driverId: driver.id,
         },
       });
 
       stripeAccountId = account.id;
 
-      await db.merchant.update({
-        where: { id: merchant.id },
+      await db.driver.update({
+        where: { id: driver.id },
         data: { stripeAccountId },
       });
     }
 
     const accountLink = await stripe.accountLinks.create({
       account: stripeAccountId,
-      refresh_url: `${process.env.NEXTAUTH_URL}/dashboard/merchant?stripe=refresh`,
-      return_url: `${process.env.NEXTAUTH_URL}/dashboard/merchant?stripe=success`,
+      refresh_url: `${process.env.NEXTAUTH_URL}/dashboard/driver/settings?stripe=refresh`,
+      return_url: `${process.env.NEXTAUTH_URL}/dashboard/driver/settings?stripe=success`,
       type: "account_onboarding",
     });
 

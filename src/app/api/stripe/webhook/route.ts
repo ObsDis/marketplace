@@ -34,11 +34,11 @@ export async function POST(request: Request) {
     switch (event.type) {
       case "checkout.session.completed": {
         const session = event.data.object as Stripe.Checkout.Session;
-        const merchantId = session.metadata?.merchantId;
+        const driverId = session.metadata?.driverId;
 
-        if (merchantId && session.subscription) {
-          await db.merchant.update({
-            where: { id: merchantId },
+        if (driverId && session.subscription) {
+          await db.driver.update({
+            where: { id: driverId },
             data: {
               subscriptionId: session.subscription as string,
               subscriptionStatus: "ACTIVE",
@@ -51,11 +51,11 @@ export async function POST(request: Request) {
       case "customer.subscription.updated": {
         const subscription = event.data.object as Stripe.Subscription;
 
-        const merchant = await db.merchant.findUnique({
+        const driver = await db.driver.findUnique({
           where: { subscriptionId: subscription.id },
         });
 
-        if (merchant) {
+        if (driver) {
           let subscriptionStatus: "ACTIVE" | "PAST_DUE" | "CANCELLED" | "INACTIVE";
 
           switch (subscription.status) {
@@ -73,8 +73,8 @@ export async function POST(request: Request) {
               subscriptionStatus = "INACTIVE";
           }
 
-          await db.merchant.update({
-            where: { id: merchant.id },
+          await db.driver.update({
+            where: { id: driver.id },
             data: { subscriptionStatus },
           });
         }
@@ -84,13 +84,13 @@ export async function POST(request: Request) {
       case "customer.subscription.deleted": {
         const subscription = event.data.object as Stripe.Subscription;
 
-        const merchant = await db.merchant.findUnique({
+        const driver = await db.driver.findUnique({
           where: { subscriptionId: subscription.id },
         });
 
-        if (merchant) {
-          await db.merchant.update({
-            where: { id: merchant.id },
+        if (driver) {
+          await db.driver.update({
+            where: { id: driver.id },
             data: { subscriptionStatus: "CANCELLED" },
           });
         }
@@ -99,11 +99,11 @@ export async function POST(request: Request) {
 
       case "account.updated": {
         const account = event.data.object as Stripe.Account;
-        const merchantId = account.metadata?.merchantId;
+        const driverId = account.metadata?.driverId;
 
-        if (merchantId && account.charges_enabled && account.payouts_enabled) {
-          await db.merchant.update({
-            where: { id: merchantId },
+        if (driverId && account.charges_enabled && account.payouts_enabled) {
+          await db.driver.update({
+            where: { id: driverId },
             data: { stripeAccountReady: true },
           });
         }

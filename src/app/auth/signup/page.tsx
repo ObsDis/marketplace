@@ -5,8 +5,7 @@ import { createClient } from "@/lib/supabase/client";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 
-type Role = "CUSTOMER" | "MERCHANT";
-type Industry = "ECOMMERCE" | "LOGISTICS" | "RIDESHARE" | "BROKERAGE";
+type Role = "CUSTOMER" | "DRIVER";
 
 export default function SignUpPage() {
   const router = useRouter();
@@ -16,12 +15,11 @@ export default function SignUpPage() {
   const [password, setPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
   const [role, setRole] = useState<Role>("CUSTOMER");
-  const [industry, setIndustry] = useState<Industry>("ECOMMERCE");
-  const [businessName, setBusinessName] = useState("");
+  const [displayName, setDisplayName] = useState("");
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
 
-  const isMerchant = role === "MERCHANT";
+  const isDriver = role === "DRIVER";
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -37,63 +35,47 @@ export default function SignUpPage() {
       return;
     }
 
-    if (isMerchant && !businessName.trim()) {
-      setError("Business name is required for merchants.");
+    if (isDriver && !displayName.trim()) {
+      setError("Display name is required for drivers.");
       return;
     }
 
     setLoading(true);
 
     try {
-      const supabase = createClient();
-      const { data, error: signUpError } = await supabase.auth.signUp({
-        email,
-        password,
-        options: {
-          data: {
-            name,
-            role,
-            industry: isMerchant ? industry : undefined,
-            businessName: isMerchant ? businessName : undefined,
-          },
-        },
-      });
-
-      if (signUpError) {
-        setError(signUpError.message);
-        return;
-      }
-
-      if (!data.user) {
-        setError("Registration failed. Please try again.");
-        return;
-      }
-
-      const body: Record<string, string> = {
-        supabaseUserId: data.user.id,
-        name,
-        email,
-        role,
-      };
-      if (isMerchant) {
-        body.industry = industry;
-        body.businessName = businessName;
-      }
-
+      // Step 1: Register via API (creates Supabase auth user + Prisma records)
       const res = await fetch("/api/auth/register", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(body),
+        body: JSON.stringify({
+          name,
+          email,
+          password,
+          role,
+          ...(isDriver && { displayName }),
+        }),
       });
 
-      const resData = await res.json();
+      const data = await res.json();
 
       if (!res.ok) {
-        setError(resData.error || "Registration failed. Please try again.");
+        setError(data.error || "Registration failed. Please try again.");
         return;
       }
 
-      router.push(isMerchant ? "/dashboard/merchant" : "/marketplace");
+      // Step 2: Sign in with the new credentials
+      const supabase = createClient();
+      const { error: signInError } = await supabase.auth.signInWithPassword({
+        email,
+        password,
+      });
+
+      if (signInError) {
+        setError(signInError.message);
+        return;
+      }
+
+      router.push(isDriver ? "/dashboard/driver" : "/marketplace");
       router.refresh();
     } catch {
       setError("An unexpected error occurred. Please try again.");
@@ -103,7 +85,7 @@ export default function SignUpPage() {
   };
 
   const inputClasses =
-    "w-full rounded-lg border border-gray-300 px-4 py-2.5 text-gray-900 placeholder-gray-400 focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/20 focus:outline-none transition";
+    "w-full rounded-lg border border-gray-300 px-4 py-2.5 text-gray-900 placeholder-gray-400 focus:border-orange-500 focus:ring-2 focus:ring-orange-500/20 focus:outline-none transition";
 
   const labelClasses = "block text-sm font-medium text-gray-700 mb-1.5";
 
@@ -114,7 +96,7 @@ export default function SignUpPage() {
           <div className="text-center mb-8">
             <h1 className="text-3xl font-bold text-gray-900">Create Account</h1>
             <p className="mt-2 text-sm text-gray-500">
-              Join our marketplace today
+              Join Sprint Cargo today
             </p>
           </div>
 
@@ -196,50 +178,31 @@ export default function SignUpPage() {
                 className={inputClasses}
               >
                 <option value="CUSTOMER">Customer</option>
-                <option value="MERCHANT">Merchant</option>
+                <option value="DRIVER">Driver</option>
               </select>
             </div>
 
-            {isMerchant && (
-              <>
-                <div>
-                  <label htmlFor="businessName" className={labelClasses}>
-                    Business Name
-                  </label>
-                  <input
-                    id="businessName"
-                    type="text"
-                    value={businessName}
-                    onChange={(e) => setBusinessName(e.target.value)}
-                    required
-                    placeholder="Your business name"
-                    className={inputClasses}
-                  />
-                </div>
-
-                <div>
-                  <label htmlFor="industry" className={labelClasses}>
-                    Industry
-                  </label>
-                  <select
-                    id="industry"
-                    value={industry}
-                    onChange={(e) => setIndustry(e.target.value as Industry)}
-                    className={inputClasses}
-                  >
-                    <option value="ECOMMERCE">E-Commerce</option>
-                    <option value="LOGISTICS">Logistics</option>
-                    <option value="RIDESHARE">Rideshare</option>
-                    <option value="BROKERAGE">Brokerage</option>
-                  </select>
-                </div>
-              </>
+            {isDriver && (
+              <div>
+                <label htmlFor="displayName" className={labelClasses}>
+                  Display Name
+                </label>
+                <input
+                  id="displayName"
+                  type="text"
+                  value={displayName}
+                  onChange={(e) => setDisplayName(e.target.value)}
+                  required
+                  placeholder="Your driver display name"
+                  className={inputClasses}
+                />
+              </div>
             )}
 
             <button
               type="submit"
               disabled={loading}
-              className="w-full rounded-lg bg-indigo-600 px-4 py-2.5 text-sm font-semibold text-white shadow-sm hover:bg-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed transition"
+              className="w-full rounded-lg bg-orange-600 px-4 py-2.5 text-sm font-semibold text-white shadow-sm hover:bg-orange-500 focus:outline-none focus:ring-2 focus:ring-orange-500 focus:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed transition"
             >
               {loading ? "Creating account..." : "Sign Up"}
             </button>
@@ -249,7 +212,7 @@ export default function SignUpPage() {
             Already have an account?{" "}
             <Link
               href="/auth/signin"
-              className="font-semibold text-indigo-600 hover:text-indigo-500 transition"
+              className="font-semibold text-orange-600 hover:text-orange-500 transition"
             >
               Sign in
             </Link>

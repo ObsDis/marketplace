@@ -4,22 +4,14 @@ import { useState, useEffect } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
-import { Menu, X, ChevronDown } from "lucide-react";
+import { Menu, X, Truck } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import type { User } from "@supabase/supabase-js";
-
-const marketplaceLinks = [
-  { label: "E-Commerce", href: "/marketplace/e-commerce" },
-  { label: "Logistics", href: "/marketplace/logistics" },
-  { label: "Ride Share", href: "/marketplace/ride-share" },
-  { label: "Brokerage", href: "/marketplace/brokerage" },
-];
 
 export function Navbar() {
   const router = useRouter();
   const [user, setUser] = useState<User | null>(null);
   const [mobileOpen, setMobileOpen] = useState(false);
-  const [dropdownOpen, setDropdownOpen] = useState(false);
 
   useEffect(() => {
     const supabase = createClient();
@@ -49,45 +41,41 @@ export function Navbar() {
   const displayName =
     user?.user_metadata?.name || user?.email || "";
 
+  const userRole: string = user?.user_metadata?.role || "";
+
+  const dashboardHref =
+    userRole === "DRIVER"
+      ? "/dashboard/driver"
+      : userRole === "ADMIN"
+        ? "/dashboard/admin"
+        : "/deliveries/new";
+
   return (
     <nav className="sticky top-0 z-40 w-full border-b bg-white shadow-sm">
       <div className="mx-auto flex h-16 max-w-7xl items-center justify-between px-4 sm:px-6 lg:px-8">
         {/* Logo */}
-        <Link href="/" className="text-xl font-bold text-indigo-600">
-          MarketHub
+        <Link href="/" className="flex items-center gap-2 text-xl font-bold text-orange-600">
+          <Truck className="h-6 w-6" />
+          Sprint Cargo
         </Link>
 
         {/* Desktop nav */}
         <div className="hidden items-center gap-6 md:flex">
-          {/* Marketplace dropdown */}
-          <div className="relative">
-            <button
-              onClick={() => setDropdownOpen(!dropdownOpen)}
-              onBlur={() => setTimeout(() => setDropdownOpen(false), 150)}
-              className="flex items-center gap-1 text-sm font-medium text-gray-700 hover:text-indigo-600 transition-colors"
-            >
-              Marketplace
-              <ChevronDown className="h-4 w-4" />
-            </button>
-            {dropdownOpen && (
-              <div className="absolute left-0 top-full mt-2 w-48 rounded-lg border bg-white py-1 shadow-lg">
-                {marketplaceLinks.map((link) => (
-                  <Link
-                    key={link.href}
-                    href={link.href}
-                    className="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-50 hover:text-indigo-600"
-                    onClick={() => setDropdownOpen(false)}
-                  >
-                    {link.label}
-                  </Link>
-                ))}
-              </div>
-            )}
-          </div>
-
+          <Link
+            href="/marketplace"
+            className="text-sm font-medium text-gray-700 hover:text-orange-600 transition-colors"
+          >
+            Browse Deliveries
+          </Link>
+          <Link
+            href="/deliveries/new"
+            className="text-sm font-medium text-gray-700 hover:text-orange-600 transition-colors"
+          >
+            Post Delivery
+          </Link>
           <Link
             href="/pricing"
-            className="text-sm font-medium text-gray-700 hover:text-indigo-600 transition-colors"
+            className="text-sm font-medium text-gray-700 hover:text-orange-600 transition-colors"
           >
             Pricing
           </Link>
@@ -100,7 +88,7 @@ export function Navbar() {
               <span className="text-sm text-gray-700">
                 {displayName}
               </span>
-              <Link href="/dashboard">
+              <Link href={dashboardHref}>
                 <Button variant="outline" size="sm">
                   Dashboard
                 </Button>
@@ -121,7 +109,9 @@ export function Navbar() {
                 </Button>
               </Link>
               <Link href="/auth/signup">
-                <Button size="sm">Sign Up</Button>
+                <Button size="sm" className="bg-orange-600 hover:bg-orange-500 text-white">
+                  Sign Up
+                </Button>
               </Link>
             </>
           )}
@@ -145,19 +135,20 @@ export function Navbar() {
       {mobileOpen && (
         <div className="border-t bg-white px-4 pb-4 pt-2 md:hidden">
           <div className="space-y-1">
-            <p className="px-3 pt-2 text-xs font-semibold uppercase tracking-wide text-gray-500">
-              Marketplace
-            </p>
-            {marketplaceLinks.map((link) => (
-              <Link
-                key={link.href}
-                href={link.href}
-                className="block rounded-lg px-3 py-2 text-sm text-gray-700 hover:bg-gray-50"
-                onClick={() => setMobileOpen(false)}
-              >
-                {link.label}
-              </Link>
-            ))}
+            <Link
+              href="/marketplace"
+              className="block rounded-lg px-3 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50"
+              onClick={() => setMobileOpen(false)}
+            >
+              Browse Deliveries
+            </Link>
+            <Link
+              href="/deliveries/new"
+              className="block rounded-lg px-3 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50"
+              onClick={() => setMobileOpen(false)}
+            >
+              Post Delivery
+            </Link>
             <Link
               href="/pricing"
               className="block rounded-lg px-3 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50"
@@ -173,7 +164,7 @@ export function Navbar() {
                 <span className="px-3 text-sm text-gray-700">
                   {displayName}
                 </span>
-                <Link href="/dashboard" onClick={() => setMobileOpen(false)}>
+                <Link href={dashboardHref} onClick={() => setMobileOpen(false)}>
                   <Button variant="outline" size="sm" className="w-full">
                     Dashboard
                   </Button>
@@ -201,7 +192,7 @@ export function Navbar() {
                   href="/auth/signup"
                   onClick={() => setMobileOpen(false)}
                 >
-                  <Button size="sm" className="w-full">
+                  <Button size="sm" className="w-full bg-orange-600 hover:bg-orange-500 text-white">
                     Sign Up
                   </Button>
                 </Link>

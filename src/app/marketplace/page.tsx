@@ -1,108 +1,204 @@
 import Link from "next/link";
-import { Search, ShoppingBag, Truck, Car, Building2 } from "lucide-react";
+import { MapPin, Package, Clock, Search, Filter, Plus } from "lucide-react";
+import { db } from "@/lib/db";
 
-const categories = [
-  {
-    name: "E-Commerce",
-    href: "/marketplace/ecommerce",
-    icon: ShoppingBag,
-    description:
-      "Browse products from verified merchants. Find everything from handmade goods to digital downloads.",
-  },
-  {
-    name: "Logistics",
-    href: "/marketplace/logistics",
-    icon: Truck,
-    description:
-      "Find available shipments and freight opportunities. Connect with carriers and shippers nationwide.",
-  },
-  {
-    name: "Ride Share",
-    href: "/marketplace/rideshare",
-    icon: Car,
-    description:
-      "Discover ride services in your area. Compare fares and request rides from local providers.",
-  },
-  {
-    name: "Business Brokerage",
-    href: "/marketplace/brokerage",
-    icon: Building2,
-    description:
-      "Explore businesses for sale across multiple industries. Find your next investment opportunity.",
-  },
-];
+export const dynamic = "force-dynamic";
 
-export default function MarketplacePage() {
+function timeAgo(date: Date): string {
+  const now = new Date();
+  const seconds = Math.floor((now.getTime() - date.getTime()) / 1000);
+  if (seconds < 60) return "just now";
+  const minutes = Math.floor(seconds / 60);
+  if (minutes < 60) return `${minutes}m ago`;
+  const hours = Math.floor(minutes / 60);
+  if (hours < 24) return `${hours}h ago`;
+  const days = Math.floor(hours / 24);
+  if (days < 7) return `${days}d ago`;
+  return date.toLocaleDateString();
+}
+
+function formatPrice(price: number): string {
+  return new Intl.NumberFormat("en-US", {
+    style: "currency",
+    currency: "USD",
+  }).format(price);
+}
+
+const sizeColors: Record<string, string> = {
+  SMALL: "bg-blue-100 text-blue-700",
+  MEDIUM: "bg-amber-100 text-amber-700",
+  LARGE: "bg-orange-100 text-orange-700",
+  EXTRA_LARGE: "bg-red-100 text-red-700",
+};
+
+export default async function MarketplacePage() {
+  const deliveries = await db.delivery.findMany({
+    where: { status: "POSTED" },
+    orderBy: { createdAt: "desc" },
+  });
+
   return (
     <div className="min-h-screen bg-gray-50">
-      {/* Hero */}
-      <section className="bg-white border-b">
-        <div className="mx-auto max-w-7xl px-4 py-16 sm:px-6 lg:px-8 text-center">
-          <h1 className="text-4xl font-bold tracking-tight text-gray-900 sm:text-5xl">
-            Browse the Marketplace
-          </h1>
-          <p className="mt-4 text-lg text-gray-600 max-w-2xl mx-auto">
-            Discover products, services, shipments, and business opportunities
-            — all in one place.
-          </p>
+      {/* Header */}
+      <section className="border-b bg-white">
+        <div className="mx-auto max-w-7xl px-4 py-12 sm:px-6 lg:px-8">
+          <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+            <div>
+              <h1 className="text-3xl font-bold tracking-tight text-gray-900 sm:text-4xl">
+                Available Deliveries
+              </h1>
+              <p className="mt-2 text-lg text-gray-600">
+                Browse open delivery jobs near you
+              </p>
+            </div>
+            <Link
+              href="/deliveries/new"
+              className="inline-flex items-center gap-2 rounded-full bg-orange-600 px-6 py-3 text-sm font-semibold text-white shadow transition hover:bg-orange-500 hover:shadow-md"
+            >
+              <Plus className="h-4 w-4" />
+              Post a Delivery
+            </Link>
+          </div>
+        </div>
+      </section>
 
-          {/* Search bar (visual only) */}
-          <div className="mt-8 max-w-xl mx-auto">
-            <div className="relative">
-              <Search className="absolute left-4 top-1/2 -translate-y-1/2 h-5 w-5 text-gray-400" />
+      {/* Search / Filter Bar */}
+      <section className="border-b bg-white">
+        <div className="mx-auto max-w-7xl px-4 py-4 sm:px-6 lg:px-8">
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
+            <div className="relative flex-1">
+              <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400" />
               <input
                 type="text"
-                placeholder="Search the marketplace..."
-                className="w-full rounded-full border border-gray-300 bg-white py-3 pl-12 pr-4 text-gray-900 shadow-sm placeholder:text-gray-400 focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500/20"
+                placeholder="Search by city or keyword..."
+                className="w-full rounded-lg border border-gray-300 bg-white py-2.5 pl-10 pr-4 text-sm text-gray-900 placeholder:text-gray-400 focus:border-orange-500 focus:outline-none focus:ring-2 focus:ring-orange-500/20"
                 readOnly
               />
+            </div>
+            <div className="flex gap-3">
+              <div className="relative">
+                <Filter className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400" />
+                <select
+                  className="appearance-none rounded-lg border border-gray-300 bg-white py-2.5 pl-10 pr-8 text-sm text-gray-700 focus:border-orange-500 focus:outline-none focus:ring-2 focus:ring-orange-500/20"
+                  disabled
+                >
+                  <option>All Cities</option>
+                </select>
+              </div>
+              <div className="relative">
+                <Package className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400" />
+                <select
+                  className="appearance-none rounded-lg border border-gray-300 bg-white py-2.5 pl-10 pr-8 text-sm text-gray-700 focus:border-orange-500 focus:outline-none focus:ring-2 focus:ring-orange-500/20"
+                  disabled
+                >
+                  <option>All Sizes</option>
+                  <option>Small</option>
+                  <option>Medium</option>
+                  <option>Large</option>
+                  <option>Extra Large</option>
+                </select>
+              </div>
             </div>
           </div>
         </div>
       </section>
 
-      {/* Category Cards */}
-      <section className="mx-auto max-w-7xl px-4 py-16 sm:px-6 lg:px-8">
-        <div className="grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-4">
-          {categories.map((category) => {
-            const Icon = category.icon;
-            return (
-              <Link
-                key={category.name}
-                href={category.href}
-                className="group flex flex-col rounded-xl border border-gray-200 bg-white p-6 shadow-sm transition hover:shadow-md hover:border-blue-200"
-              >
-                <div className="mb-4 flex h-12 w-12 items-center justify-center rounded-lg bg-blue-50 text-blue-600 group-hover:bg-blue-100 transition">
-                  <Icon className="h-6 w-6" />
-                </div>
-                <h3 className="text-lg font-semibold text-gray-900">
-                  {category.name}
-                </h3>
-                <p className="mt-2 flex-1 text-sm text-gray-600">
-                  {category.description}
-                </p>
-                <div className="mt-4">
-                  <span className="inline-flex items-center text-sm font-medium text-blue-600 group-hover:text-blue-700">
-                    Browse
-                    <svg
-                      className="ml-1 h-4 w-4 transition group-hover:translate-x-0.5"
-                      fill="none"
-                      viewBox="0 0 24 24"
-                      strokeWidth={2}
-                      stroke="currentColor"
+      {/* Delivery Grid */}
+      <section className="mx-auto max-w-7xl px-4 py-8 sm:px-6 lg:px-8">
+        {deliveries.length === 0 ? (
+          <div className="flex flex-col items-center justify-center rounded-2xl border-2 border-dashed border-gray-300 bg-white px-6 py-20 text-center">
+            <Package className="h-12 w-12 text-gray-400" />
+            <h3 className="mt-4 text-lg font-semibold text-gray-900">
+              No deliveries posted yet
+            </h3>
+            <p className="mt-2 text-sm text-gray-600">
+              Be the first to post a delivery!
+            </p>
+            <Link
+              href="/deliveries/new"
+              className="mt-6 inline-flex items-center gap-2 rounded-full bg-orange-600 px-6 py-2.5 text-sm font-semibold text-white shadow transition hover:bg-orange-500"
+            >
+              <Plus className="h-4 w-4" />
+              Post a Delivery
+            </Link>
+          </div>
+        ) : (
+          <>
+            <p className="mb-6 text-sm text-gray-500">
+              {deliveries.length} delivery{deliveries.length !== 1 ? "ies" : ""}{" "}
+              available
+            </p>
+            <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
+              {deliveries.map((delivery) => (
+                <div
+                  key={delivery.id}
+                  className="group flex flex-col rounded-xl border border-gray-200 bg-white shadow-sm transition hover:border-orange-200 hover:shadow-md"
+                >
+                  <div className="flex-1 p-6">
+                    <div className="flex items-start justify-between gap-2">
+                      <h3 className="text-base font-semibold text-gray-900 group-hover:text-orange-700">
+                        {delivery.title}
+                      </h3>
+                      <span
+                        className={`flex-shrink-0 rounded-full px-2.5 py-0.5 text-xs font-medium ${
+                          sizeColors[delivery.packageSize] ||
+                          "bg-gray-100 text-gray-700"
+                        }`}
+                      >
+                        {delivery.packageSize.replace("_", " ")}
+                      </span>
+                    </div>
+
+                    {/* Route */}
+                    <div className="mt-4 space-y-2">
+                      <div className="flex items-center gap-2 text-sm text-gray-600">
+                        <MapPin className="h-4 w-4 flex-shrink-0 text-green-500" />
+                        <span>
+                          {delivery.pickupCity}, {delivery.pickupState}
+                        </span>
+                      </div>
+                      <div className="ml-2 border-l-2 border-dashed border-gray-200 py-1" />
+                      <div className="flex items-center gap-2 text-sm text-gray-600">
+                        <MapPin className="h-4 w-4 flex-shrink-0 text-orange-500" />
+                        <span>
+                          {delivery.dropoffCity}, {delivery.dropoffState}
+                        </span>
+                      </div>
+                    </div>
+
+                    {/* Price and Date */}
+                    <div className="mt-4 flex items-center justify-between">
+                      <span className="text-lg font-bold text-orange-600">
+                        {formatPrice(delivery.price)}
+                      </span>
+                      {delivery.scheduledDate && (
+                        <span className="flex items-center gap-1 text-xs text-gray-500">
+                          <Clock className="h-3.5 w-3.5" />
+                          {new Date(
+                            delivery.scheduledDate
+                          ).toLocaleDateString()}
+                        </span>
+                      )}
+                    </div>
+                  </div>
+
+                  {/* Footer */}
+                  <div className="flex items-center justify-between border-t border-gray-100 px-6 py-3">
+                    <span className="text-xs text-gray-400">
+                      {timeAgo(delivery.createdAt)}
+                    </span>
+                    <Link
+                      href={`/deliveries/${delivery.id}`}
+                      className="text-sm font-medium text-orange-600 transition hover:text-orange-500"
                     >
-                      <path
-                        strokeLinecap="round"
-                        strokeLinejoin="round"
-                        d="M13.5 4.5 21 12m0 0-7.5 7.5M21 12H3"
-                      />
-                    </svg>
-                  </span>
+                      View Details &rarr;
+                    </Link>
+                  </div>
                 </div>
-              </Link>
-            );
-          })}
-        </div>
+              ))}
+            </div>
+          </>
+        )}
       </section>
     </div>
   );

@@ -11,20 +11,20 @@ export async function POST() {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
-    if (session.user.role !== "MERCHANT") {
+    if (session.user.role !== "DRIVER") {
       return NextResponse.json(
-        { error: "Only merchants can subscribe" },
+        { error: "Only drivers can subscribe" },
         { status: 403 }
       );
     }
 
-    const merchant = await db.merchant.findUnique({
+    const driver = await db.driver.findUnique({
       where: { userId: session.user.id },
     });
 
-    if (!merchant) {
+    if (!driver) {
       return NextResponse.json(
-        { error: "Merchant profile not found" },
+        { error: "Driver profile not found" },
         { status: 404 }
       );
     }
@@ -37,11 +37,11 @@ export async function POST() {
           quantity: 1,
         },
       ],
-      success_url: `${process.env.NEXTAUTH_URL}/dashboard/merchant?subscription=success`,
-      cancel_url: `${process.env.NEXTAUTH_URL}/dashboard/merchant?subscription=cancelled`,
+      success_url: `${process.env.NEXTAUTH_URL}/dashboard/driver?subscription=success`,
+      cancel_url: `${process.env.NEXTAUTH_URL}/dashboard/driver?subscription=cancelled`,
       customer_email: session.user.email!,
       metadata: {
-        merchantId: merchant.id,
+        driverId: driver.id,
       },
     });
 

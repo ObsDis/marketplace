@@ -1,15 +1,15 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
 import { db } from "@/lib/db";
-import { UserRole, Industry } from "@/generated/prisma";
+import { UserRole } from "@/generated/prisma";
+import { createAdminClient } from "@/lib/supabase/admin";
 
 const registerSchema = z.object({
-  supabaseUserId: z.string().min(1, "Supabase user ID is required"),
   name: z.string().min(1, "Name is required"),
   email: z.string().email("Invalid email address"),
+  password: z.string().min(8, "Password must be at least 8 characters"),
   role: z.nativeEnum(UserRole),
-  industry: z.nativeEnum(Industry).optional(),
-  businessName: z.string().optional(),
+  displayName: z.string().optional(),
 });
 
 export async function POST(request: Request) {
@@ -17,15 +17,16 @@ export async function POST(request: Request) {
     const body = await request.json();
     const parsed = registerSchema.parse(body);
 
-    const { supabaseUserId, name, email, role, industry, businessName } = parsed;
+    const { name, email, password, role, displayName } = parsed;
 
-    if (role === UserRole.MERCHANT && !businessName?.trim()) {
+    if (role === UserRole.DRIVER && !displayName?.trim()) {
       return NextResponse.json(
-        { error: "Business name is required for merchants." },
+        { error: "Display name is required for drivers." },
         { status: 400 }
       );
     }
 
+    // Check if user already exists in our DB
     const existingUser = await db.user.findUnique({
       where: { email },
     });
@@ -37,17 +38,35 @@ export async function POST(request: Request) {
       );
     }
 
+    // Create user in Supabase Auth (auto-confirmed via admin API)
+    const supabase = createAdminClient();
+    const { data: authData, error: authError } =
+      await supabase.auth.admin.createUser({
+        email,
+        password,
+        email_confirm: true,
+        user_metadata: { name, role },
+      });
+
+    if (authError) {
+      console.error("Supabase auth error:", authError);
+      return NextResponse.json(
+        { error: authError.message },
+        { status: 400 }
+      );
+    }
+
+    // Create user in our Prisma DB with the Supabase user ID
     const user = await db.user.create({
       data: {
-        id: supabaseUserId,
+        id: authData.user.id,
         name,
         email,
         role,
-        ...(role === UserRole.MERCHANT && {
-          merchant: {
+        ...(role === UserRole.DRIVER && {
+          driver: {
             create: {
-              businessName: businessName!,
-              industry: industry || Industry.ECOMMERCE,
+              displayName: displayName!,
             },
           },
         }),
