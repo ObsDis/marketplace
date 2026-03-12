@@ -4,9 +4,10 @@ import { getSession } from "@/lib/auth";
 import { stripe } from "@/lib/stripe";
 import { DeliveryStatus, SubStatus } from "@/generated/prisma";
 
-// Platform fee percentage — the CC fee arbitrage margin.
-// At scale, negotiate Stripe volume rates (e.g. 2.2%) while keeping this spread.
-const PLATFORM_FEE_PERCENT = 0.05; // 5% platform fee on each delivery
+// Stripe's standard CC processing fee — passed through, not profit.
+// Revenue comes from driver $99.99/month subscriptions.
+const STRIPE_FEE_PERCENT = 0.029;
+const STRIPE_FEE_FIXED_CENTS = 30;
 
 export async function GET(
   _request: Request,
@@ -190,8 +191,9 @@ export async function PATCH(
           driver.stripeAccountId
         ) {
           const amountCents = Math.round(delivery.price * 100);
-          const platformFeeCents = Math.round(amountCents * PLATFORM_FEE_PERCENT);
-          const transferAmount = amountCents - platformFeeCents;
+          // Deduct only the Stripe CC processing fee (2.9% + $0.30)
+          const stripeFee = Math.round(amountCents * STRIPE_FEE_PERCENT) + STRIPE_FEE_FIXED_CENTS;
+          const transferAmount = amountCents - stripeFee;
 
           try {
             const transfer = await stripe.transfers.create({
@@ -202,13 +204,13 @@ export async function PATCH(
               metadata: {
                 deliveryId: delivery.id,
                 driverId: driver.id,
-                platformFee: platformFeeCents.toString(),
+                stripeFee: stripeFee.toString(),
               },
             });
 
             updateData.transferId = transfer.id;
             updateData.paymentStatus = "TRANSFERRED";
-            updateData.platformFee = platformFeeCents / 100;
+            updateData.platformFee = stripeFee / 100;
           } catch (transferError) {
             console.error("Transfer to driver failed:", transferError);
             // Don't block delivery completion — mark for manual resolution

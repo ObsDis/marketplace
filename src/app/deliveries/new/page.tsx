@@ -256,7 +256,8 @@ function CheckoutForm({
           <div className="mt-4 rounded-lg bg-gray-100 px-4 py-3">
             <p className="text-xs text-gray-500 leading-relaxed">
               Your card will be charged <strong>${price.toFixed(2)}</strong> now.
-              Funds are held securely until the delivery is completed. If you
+              Funds are held securely until the delivery is completed — your
+              driver receives 100% minus credit card processing fees. If you
               cancel before a driver accepts, you&apos;ll receive a full refund.
             </p>
           </div>
