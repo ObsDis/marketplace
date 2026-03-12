@@ -109,6 +109,54 @@ export async function POST(request: Request) {
         }
         break;
       }
+
+      case "payment_intent.succeeded": {
+        const pi = event.data.object as Stripe.PaymentIntent;
+        // Update delivery payment status if we have a matching record
+        const delivery = await db.delivery.findUnique({
+          where: { paymentIntentId: pi.id },
+        });
+        if (delivery && delivery.paymentStatus !== "TRANSFERRED") {
+          await db.delivery.update({
+            where: { id: delivery.id },
+            data: { paymentStatus: "PAID" },
+          });
+        }
+        break;
+      }
+
+      case "payment_intent.payment_failed": {
+        const pi = event.data.object as Stripe.PaymentIntent;
+        const delivery = await db.delivery.findUnique({
+          where: { paymentIntentId: pi.id },
+        });
+        if (delivery) {
+          await db.delivery.update({
+            where: { id: delivery.id },
+            data: { paymentStatus: "FAILED" },
+          });
+        }
+        break;
+      }
+
+      case "charge.refunded": {
+        const charge = event.data.object as Stripe.Charge;
+        if (charge.payment_intent) {
+          const piId = typeof charge.payment_intent === "string"
+            ? charge.payment_intent
+            : charge.payment_intent.id;
+          const delivery = await db.delivery.findUnique({
+            where: { paymentIntentId: piId },
+          });
+          if (delivery) {
+            await db.delivery.update({
+              where: { id: delivery.id },
+              data: { paymentStatus: "REFUNDED" },
+            });
+          }
+        }
+        break;
+      }
     }
 
     return NextResponse.json({ received: true });

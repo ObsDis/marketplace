@@ -3,13 +3,25 @@
 import { useState, useEffect, useCallback } from "react";
 import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
+import { loadStripe } from "@stripe/stripe-js";
+import {
+  Elements,
+  PaymentElement,
+  useStripe,
+  useElements,
+} from "@stripe/react-stripe-js";
 import PackageSizeSelector from "@/components/delivery/PackageSizeSelector";
 
-// Price estimation based on size, weight, and item count
+const stripePromise = loadStripe(
+  process.env.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY!
+);
+
+// Price estimation based on size, weight, item count, and distance
 function estimatePrice(
   size: string,
   weight: number,
-  count: number
+  count: number,
+  distance: number
 ): number {
   const basePrices: Record<string, number> = {
     SMALL: 25,
@@ -20,22 +32,259 @@ function estimatePrice(
     PALLET: 350,
   };
 
+  const perMileRates: Record<string, number> = {
+    SMALL: 1.0,
+    MEDIUM: 1.25,
+    LARGE: 1.5,
+    XL: 1.75,
+    XXL: 2.0,
+    PALLET: 2.5,
+  };
+
   const base = basePrices[size] || 50;
+  const perMile = perMileRates[size] || 1.25;
 
-  // Weight surcharge: $0.50 per lb over 20 lbs
+  const distanceSurcharge = distance > 5 ? (distance - 5) * perMile : 0;
   const weightSurcharge = weight > 20 ? (weight - 20) * 0.5 : 0;
-
-  // Multi-item surcharge: each additional item adds 30% of base
   const countSurcharge = count > 1 ? (count - 1) * base * 0.3 : 0;
 
-  return Math.round((base + weightSurcharge + countSurcharge) * 100) / 100;
+  return Math.round((base + distanceSurcharge + weightSurcharge + countSurcharge) * 100) / 100;
 }
 
+// ─── Inner form that has access to Stripe hooks ─────────────
+function CheckoutForm({
+  clientSecret,
+  paymentIntentId,
+  form,
+  imageFiles,
+  imagePreviews,
+  onBack,
+}: {
+  clientSecret: string;
+  paymentIntentId: string;
+  form: Record<string, string>;
+  imageFiles: File[];
+  imagePreviews: string[];
+  onBack: () => void;
+}) {
+  const stripe = useStripe();
+  const elements = useElements();
+  const router = useRouter();
+  const [submitting, setSubmitting] = useState(false);
+  const [error, setError] = useState("");
+
+  async function handlePayAndPost(e: React.FormEvent) {
+    e.preventDefault();
+    if (!stripe || !elements) return;
+
+    setSubmitting(true);
+    setError("");
+
+    try {
+      // 1. Confirm payment
+      const { error: paymentError } = await stripe.confirmPayment({
+        elements,
+        confirmParams: {
+          return_url: window.location.href, // fallback, we handle redirect ourselves
+        },
+        redirect: "if_required",
+      });
+
+      if (paymentError) {
+        setError(paymentError.message || "Payment failed");
+        setSubmitting(false);
+        return;
+      }
+
+      // 2. Upload images if any
+      let imageUrls: string[] = [];
+      if (imageFiles.length > 0) {
+        const formData = new FormData();
+        imageFiles.forEach((file) => formData.append("files", file));
+
+        const uploadRes = await fetch("/api/upload", {
+          method: "POST",
+          body: formData,
+        });
+
+        if (!uploadRes.ok) {
+          const data = await uploadRes.json().catch(() => ({}));
+          throw new Error(data.error || "Failed to upload images");
+        }
+
+        const uploadData = await uploadRes.json();
+        imageUrls = uploadData.urls;
+      }
+
+      // 3. Create delivery with payment reference
+      const body = {
+        title: form.title,
+        description: form.description || undefined,
+        packageSize: form.packageSize,
+        packageWeight: form.packageWeight
+          ? parseFloat(form.packageWeight)
+          : undefined,
+        packageCount: parseInt(form.packageCount) || 1,
+        pickupAddress: form.pickupAddress,
+        pickupCity: form.pickupCity,
+        pickupState: form.pickupState,
+        pickupZip: form.pickupZip,
+        pickupContact: form.pickupContact || undefined,
+        pickupPhone: form.pickupPhone || undefined,
+        pickupNotes: form.pickupNotes || undefined,
+        dropoffAddress: form.dropoffAddress,
+        dropoffCity: form.dropoffCity,
+        dropoffState: form.dropoffState,
+        dropoffZip: form.dropoffZip,
+        dropoffContact: form.dropoffContact || undefined,
+        dropoffPhone: form.dropoffPhone || undefined,
+        dropoffNotes: form.dropoffNotes || undefined,
+        images: imageUrls.length > 0 ? imageUrls : undefined,
+        distance: form.distance ? parseFloat(form.distance) : undefined,
+        price: parseFloat(form.price),
+        pickupDate: form.pickupDate
+          ? new Date(form.pickupDate).toISOString()
+          : undefined,
+        pickupTime: form.pickupTime || undefined,
+        deliveryDate: form.deliveryDate
+          ? new Date(form.deliveryDate).toISOString()
+          : undefined,
+        deliveryTime: form.deliveryTime || undefined,
+        latestDeliveryTime: form.latestDeliveryTime || undefined,
+        paymentIntentId,
+      };
+
+      const res = await fetch("/api/deliveries", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(body),
+      });
+
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}));
+        throw new Error(data.error || "Failed to create delivery");
+      }
+
+      const delivery = await res.json();
+      router.push(`/deliveries/${delivery.id}`);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Something went wrong");
+      setSubmitting(false);
+    }
+  }
+
+  const price = parseFloat(form.price);
+
+  return (
+    <div className="min-h-screen bg-gray-50">
+      <div className="mx-auto max-w-lg px-4 py-8 sm:px-6">
+        <button
+          type="button"
+          onClick={onBack}
+          className="text-sm font-medium text-orange-600 hover:text-orange-500"
+        >
+          &larr; Back to delivery details
+        </button>
+        <h1 className="mt-4 text-2xl font-bold text-gray-900">
+          Review & Pay
+        </h1>
+
+        {error && (
+          <div className="mt-4 rounded-lg bg-red-50 px-4 py-3 text-sm font-medium text-red-700">
+            {error}
+          </div>
+        )}
+
+        {/* Order Summary */}
+        <div className="mt-6 rounded-xl bg-white p-6 shadow-sm">
+          <h2 className="text-sm font-semibold uppercase tracking-wider text-gray-400">
+            Order Summary
+          </h2>
+          <div className="mt-4 space-y-2">
+            <div className="flex justify-between text-sm">
+              <span className="text-gray-600">{form.title}</span>
+              <span className="font-medium text-gray-900">
+                ${price.toFixed(2)}
+              </span>
+            </div>
+            <div className="flex justify-between text-sm">
+              <span className="text-gray-600">
+                {form.pickupCity}, {form.pickupState} &rarr;{" "}
+                {form.dropoffCity}, {form.dropoffState}
+              </span>
+            </div>
+            <div className="flex justify-between text-sm">
+              <span className="text-gray-600">
+                {form.packageSize} &middot; {form.packageCount} item(s)
+                {form.packageWeight && ` &middot; ${form.packageWeight} lbs`}
+              </span>
+            </div>
+            {imagePreviews.length > 0 && (
+              <div className="flex gap-2 pt-2">
+                {imagePreviews.map((src, i) => (
+                  <img
+                    key={i}
+                    src={src}
+                    alt={`Item ${i + 1}`}
+                    className="h-12 w-12 rounded object-cover border"
+                  />
+                ))}
+              </div>
+            )}
+          </div>
+          <div className="mt-4 border-t pt-4 flex justify-between">
+            <span className="text-base font-semibold text-gray-900">Total</span>
+            <span className="text-xl font-bold text-orange-600">
+              ${price.toFixed(2)}
+            </span>
+          </div>
+        </div>
+
+        {/* Payment */}
+        <form onSubmit={handlePayAndPost} className="mt-6">
+          <div className="rounded-xl bg-white p-6 shadow-sm">
+            <h2 className="text-sm font-semibold uppercase tracking-wider text-gray-400 mb-4">
+              Payment Details
+            </h2>
+            <PaymentElement
+              options={{
+                layout: "tabs",
+              }}
+            />
+          </div>
+
+          <div className="mt-4 rounded-lg bg-gray-100 px-4 py-3">
+            <p className="text-xs text-gray-500 leading-relaxed">
+              Your card will be charged <strong>${price.toFixed(2)}</strong> now.
+              Funds are held securely until the delivery is completed. If you
+              cancel before a driver accepts, you&apos;ll receive a full refund.
+            </p>
+          </div>
+
+          <button
+            type="submit"
+            disabled={submitting || !stripe || !elements}
+            className="mt-4 w-full rounded-lg bg-orange-600 px-8 py-3 text-sm font-semibold text-white shadow transition hover:bg-orange-500 disabled:opacity-50"
+          >
+            {submitting ? "Processing..." : `Pay $${price.toFixed(2)} & Post Delivery`}
+          </button>
+        </form>
+      </div>
+    </div>
+  );
+}
+
+// ─── Main page component ────────────────────────────────────
 export default function NewDeliveryPage() {
   const router = useRouter();
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState("");
+
+  // Payment step state
+  const [step, setStep] = useState<"form" | "payment">("form");
+  const [clientSecret, setClientSecret] = useState("");
+  const [paymentIntentId, setPaymentIntentId] = useState("");
 
   const [form, setForm] = useState({
     title: "",
@@ -57,6 +306,7 @@ export default function NewDeliveryPage() {
     dropoffContact: "",
     dropoffPhone: "",
     dropoffNotes: "",
+    distance: "",
     price: "",
     pickupDate: "",
     pickupTime: "",
@@ -67,13 +317,12 @@ export default function NewDeliveryPage() {
 
   const [imageFiles, setImageFiles] = useState<File[]>([]);
   const [imagePreviews, setImagePreviews] = useState<string[]>([]);
-  const [uploadingImages, setUploadingImages] = useState(false);
 
-  // Compute estimated price
   const estimated = estimatePrice(
     form.packageSize,
     parseFloat(form.packageWeight) || 0,
-    parseInt(form.packageCount) || 1
+    parseInt(form.packageCount) || 1,
+    parseFloat(form.distance) || 0
   );
 
   useEffect(() => {
@@ -105,7 +354,6 @@ export default function NewDeliveryPage() {
     const newFiles = [...imageFiles, ...files];
     setImageFiles(newFiles);
 
-    // Generate previews
     const newPreviews = [...imagePreviews];
     files.forEach((file) => {
       const url = URL.createObjectURL(file);
@@ -124,86 +372,42 @@ export default function NewDeliveryPage() {
     updateForm("price", estimated.toFixed(2));
   }
 
-  async function handleSubmit(e: React.FormEvent) {
+  // Proceed to payment step — creates a PaymentIntent
+  async function handleProceedToPayment(e: React.FormEvent) {
     e.preventDefault();
     setSubmitting(true);
     setError("");
 
+    const price = parseFloat(form.price);
+    if (!price || price <= 0) {
+      setError("Please enter a valid price");
+      setSubmitting(false);
+      return;
+    }
+
     try {
-      // Upload images first if any
-      let imageUrls: string[] = [];
-      if (imageFiles.length > 0) {
-        setUploadingImages(true);
-        const formData = new FormData();
-        imageFiles.forEach((file) => formData.append("files", file));
-
-        const uploadRes = await fetch("/api/upload", {
-          method: "POST",
-          body: formData,
-        });
-
-        if (!uploadRes.ok) {
-          const data = await uploadRes.json().catch(() => ({}));
-          throw new Error(data.error || "Failed to upload images");
-        }
-
-        const uploadData = await uploadRes.json();
-        imageUrls = uploadData.urls;
-        setUploadingImages(false);
-      }
-
-      const body = {
-        title: form.title,
-        description: form.description || undefined,
-        packageSize: form.packageSize,
-        packageWeight: form.packageWeight
-          ? parseFloat(form.packageWeight)
-          : undefined,
-        packageCount: parseInt(form.packageCount) || 1,
-        pickupAddress: form.pickupAddress,
-        pickupCity: form.pickupCity,
-        pickupState: form.pickupState,
-        pickupZip: form.pickupZip,
-        pickupContact: form.pickupContact || undefined,
-        pickupPhone: form.pickupPhone || undefined,
-        pickupNotes: form.pickupNotes || undefined,
-        dropoffAddress: form.dropoffAddress,
-        dropoffCity: form.dropoffCity,
-        dropoffState: form.dropoffState,
-        dropoffZip: form.dropoffZip,
-        dropoffContact: form.dropoffContact || undefined,
-        dropoffPhone: form.dropoffPhone || undefined,
-        dropoffNotes: form.dropoffNotes || undefined,
-        images: imageUrls.length > 0 ? imageUrls : undefined,
-        price: parseFloat(form.price),
-        pickupDate: form.pickupDate
-          ? new Date(form.pickupDate).toISOString()
-          : undefined,
-        pickupTime: form.pickupTime || undefined,
-        deliveryDate: form.deliveryDate
-          ? new Date(form.deliveryDate).toISOString()
-          : undefined,
-        deliveryTime: form.deliveryTime || undefined,
-        latestDeliveryTime: form.latestDeliveryTime || undefined,
-      };
-
-      const res = await fetch("/api/deliveries", {
+      const res = await fetch("/api/payments/create-intent", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(body),
+        body: JSON.stringify({
+          amount: price,
+          deliveryTitle: form.title,
+        }),
       });
 
       if (!res.ok) {
         const data = await res.json().catch(() => ({}));
-        throw new Error(data.error || "Failed to create delivery");
+        throw new Error(data.error || "Failed to initialize payment");
       }
 
-      const delivery = await res.json();
-      router.push(`/deliveries/${delivery.id}`);
+      const data = await res.json();
+      setClientSecret(data.clientSecret);
+      setPaymentIntentId(data.paymentIntentId);
+      setStep("payment");
     } catch (err) {
       setError(err instanceof Error ? err.message : "Something went wrong");
+    } finally {
       setSubmitting(false);
-      setUploadingImages(false);
     }
   }
 
@@ -215,6 +419,35 @@ export default function NewDeliveryPage() {
     );
   }
 
+  // ─── Payment step ──────────────────────────────────────────
+  if (step === "payment" && clientSecret) {
+    return (
+      <Elements
+        stripe={stripePromise}
+        options={{
+          clientSecret,
+          appearance: {
+            theme: "stripe",
+            variables: {
+              colorPrimary: "#ea580c",
+              borderRadius: "8px",
+            },
+          },
+        }}
+      >
+        <CheckoutForm
+          clientSecret={clientSecret}
+          paymentIntentId={paymentIntentId}
+          form={form}
+          imageFiles={imageFiles}
+          imagePreviews={imagePreviews}
+          onBack={() => setStep("form")}
+        />
+      </Elements>
+    );
+  }
+
+  // ─── Form step ─────────────────────────────────────────────
   const inputClass =
     "mt-1 block w-full rounded-lg border border-gray-300 px-3 py-2 text-sm shadow-sm focus:border-orange-500 focus:outline-none focus:ring-1 focus:ring-orange-500";
   const labelClass = "block text-sm font-medium text-gray-700";
@@ -224,7 +457,7 @@ export default function NewDeliveryPage() {
       <div className="mx-auto max-w-3xl px-4 py-8 sm:px-6 lg:px-8">
         <h1 className="text-2xl font-bold text-gray-900">Post a Delivery</h1>
         <p className="mt-1 text-sm text-gray-500">
-          Fill in the details below and a driver will accept your job.
+          Fill in the details below, then pay to post your delivery.
         </p>
 
         {error && (
@@ -233,7 +466,7 @@ export default function NewDeliveryPage() {
           </div>
         )}
 
-        <form onSubmit={handleSubmit} className="mt-6 space-y-6">
+        <form onSubmit={handleProceedToPayment} className="mt-6 space-y-6">
           {/* Basic Info */}
           <div className="rounded-xl bg-white p-6 shadow-sm">
             <h2 className="text-lg font-semibold text-gray-900">
@@ -583,6 +816,22 @@ export default function NewDeliveryPage() {
           <div className="rounded-xl bg-white p-6 shadow-sm">
             <h2 className="text-lg font-semibold text-gray-900">Budget</h2>
 
+            <div className="mt-4">
+              <label className={labelClass}>Estimated Distance (miles)</label>
+              <input
+                type="number"
+                value={form.distance}
+                onChange={(e) => updateForm("distance", e.target.value)}
+                className={inputClass}
+                placeholder="e.g. 25"
+                min="0"
+                step="0.1"
+              />
+              <p className="mt-1 text-xs text-gray-400">
+                Approximate driving distance between pickup and dropoff
+              </p>
+            </div>
+
             {/* Price Estimate */}
             <div className="mt-4 rounded-lg bg-orange-50 border border-orange-200 p-4">
               <div className="flex items-center justify-between">
@@ -592,6 +841,7 @@ export default function NewDeliveryPage() {
                   </p>
                   <p className="text-xs text-orange-600 mt-0.5">
                     Based on size
+                    {form.distance ? ", distance" : ""}
                     {form.packageWeight ? ", weight" : ""}
                     {parseInt(form.packageCount) > 1 ? ", and item count" : ""}
                   </p>
@@ -632,18 +882,14 @@ export default function NewDeliveryPage() {
             </div>
           </div>
 
-          {/* Submit */}
+          {/* Submit → goes to payment */}
           <div className="flex justify-end">
             <button
               type="submit"
               disabled={submitting}
               className="rounded-lg bg-orange-600 px-8 py-3 text-sm font-semibold text-white shadow transition hover:bg-orange-500 disabled:opacity-50"
             >
-              {uploadingImages
-                ? "Uploading images..."
-                : submitting
-                  ? "Posting..."
-                  : "Post Delivery"}
+              {submitting ? "Preparing payment..." : "Continue to Payment"}
             </button>
           </div>
         </form>

@@ -1,7 +1,12 @@
 import { NextResponse } from "next/server";
 import { db } from "@/lib/db";
 import { getSession } from "@/lib/auth";
+import { stripe } from "@/lib/stripe";
 import { DeliveryStatus, SubStatus } from "@/generated/prisma";
+
+// Platform fee percentage — the CC fee arbitrage margin.
+// At scale, negotiate Stripe volume rates (e.g. 2.2%) while keeping this spread.
+const PLATFORM_FEE_PERCENT = 0.05; // 5% platform fee on each delivery
 
 export async function GET(
   _request: Request,
@@ -68,7 +73,7 @@ export async function PATCH(
       );
     }
 
-    // Customer cancellation
+    // ─── Customer cancellation ──────────────────────────────
     if (status === DeliveryStatus.CANCELLED) {
       if (delivery.customerId !== session.user.id) {
         return NextResponse.json(
@@ -77,15 +82,36 @@ export async function PATCH(
         );
       }
 
+      // Refund the customer if payment was made
+      let refundId: string | undefined;
+      if (delivery.paymentIntentId && delivery.paymentStatus === "PAID") {
+        try {
+          const refund = await stripe.refunds.create({
+            payment_intent: delivery.paymentIntentId,
+          });
+          refundId = refund.id;
+        } catch (refundError) {
+          console.error("Refund failed:", refundError);
+          return NextResponse.json(
+            { error: "Failed to process refund. Please contact support." },
+            { status: 500 }
+          );
+        }
+      }
+
       const updated = await db.delivery.update({
         where: { id },
-        data: { status: DeliveryStatus.CANCELLED },
+        data: {
+          status: DeliveryStatus.CANCELLED,
+          paymentStatus: refundId ? "REFUNDED" : delivery.paymentStatus,
+          refundId,
+        },
       });
 
       return NextResponse.json(updated);
     }
 
-    // Driver accepting
+    // ─── Driver accepting ────────────────────────────────────
     if (status === DeliveryStatus.ACCEPTED) {
       const driver = await db.driver.findUnique({
         where: { userId: session.user.id },
@@ -112,6 +138,14 @@ export async function PATCH(
         );
       }
 
+      // Require Stripe Connect for payout
+      if (!driver.stripeAccountId || !driver.stripeAccountReady) {
+        return NextResponse.json(
+          { error: "You must complete Stripe Connect setup to accept deliveries." },
+          { status: 403 }
+        );
+      }
+
       const updated = await db.delivery.update({
         where: { id },
         data: {
@@ -123,7 +157,7 @@ export async function PATCH(
       return NextResponse.json(updated);
     }
 
-    // Driver status updates
+    // ─── Driver status updates ───────────────────────────────
     if (
       status === DeliveryStatus.PICKED_UP ||
       status === DeliveryStatus.IN_TRANSIT ||
@@ -146,8 +180,41 @@ export async function PATCH(
         updateData.pickedUpAt = new Date();
       }
 
+      // ─── DELIVERED: Transfer payment to driver ─────────────
       if (status === DeliveryStatus.DELIVERED) {
         updateData.deliveredAt = new Date();
+
+        if (
+          delivery.paymentIntentId &&
+          delivery.paymentStatus === "PAID" &&
+          driver.stripeAccountId
+        ) {
+          const amountCents = Math.round(delivery.price * 100);
+          const platformFeeCents = Math.round(amountCents * PLATFORM_FEE_PERCENT);
+          const transferAmount = amountCents - platformFeeCents;
+
+          try {
+            const transfer = await stripe.transfers.create({
+              amount: transferAmount,
+              currency: "usd",
+              destination: driver.stripeAccountId,
+              transfer_group: delivery.id,
+              metadata: {
+                deliveryId: delivery.id,
+                driverId: driver.id,
+                platformFee: platformFeeCents.toString(),
+              },
+            });
+
+            updateData.transferId = transfer.id;
+            updateData.paymentStatus = "TRANSFERRED";
+            updateData.platformFee = platformFeeCents / 100;
+          } catch (transferError) {
+            console.error("Transfer to driver failed:", transferError);
+            // Don't block delivery completion — mark for manual resolution
+            updateData.paymentStatus = "PAID"; // stays as PAID, admin resolves
+          }
+        }
       }
 
       const updated = await db.delivery.update({
@@ -214,6 +281,17 @@ export async function DELETE(
         { error: "Only deliveries with POSTED status can be deleted." },
         { status: 400 }
       );
+    }
+
+    // Refund if paid
+    if (delivery.paymentIntentId && delivery.paymentStatus === "PAID") {
+      try {
+        await stripe.refunds.create({
+          payment_intent: delivery.paymentIntentId,
+        });
+      } catch (refundError) {
+        console.error("Refund on delete failed:", refundError);
+      }
     }
 
     await db.delivery.delete({ where: { id } });

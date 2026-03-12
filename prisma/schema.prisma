@@ -113,6 +113,12 @@ model Delivery {
   deliveredAt     DateTime?
   trackingNote    String?
   photo           String?
+  // Payment fields
+  paymentIntentId String?        @unique
+  paymentStatus   PaymentStatus  @default(UNPAID)
+  transferId      String?        @unique
+  refundId        String?
+  platformFee     Float?
   createdAt       DateTime       @default(now())
   updatedAt       DateTime       @updatedAt
 
@@ -120,6 +126,15 @@ model Delivery {
   driver   Driver?  @relation(fields: [driverId], references: [id])
 
   @@map("deliveries")
+}
+
+enum PaymentStatus {
+  UNPAID
+  PENDING
+  PAID
+  TRANSFERRED
+  REFUNDED
+  FAILED
 }
 
 enum PackageSize {
