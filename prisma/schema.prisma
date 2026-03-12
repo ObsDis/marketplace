@@ -128,15 +128,6 @@ model Delivery {
   @@map("deliveries")
 }
 
-enum PaymentStatus {
-  UNPAID
-  PENDING
-  PAID
-  TRANSFERRED
-  REFUNDED
-  FAILED
-}
-
 enum PackageSize {
   SMALL
   MEDIUM
@@ -153,6 +144,15 @@ enum DeliveryStatus {
   IN_TRANSIT
   DELIVERED
   CANCELLED
+}
+
+enum PaymentStatus {
+  UNPAID
+  PENDING
+  PAID
+  TRANSFERRED
+  REFUNDED
+  FAILED
 }
 
 // ─── Reviews ────────────────────────────────────────────────
