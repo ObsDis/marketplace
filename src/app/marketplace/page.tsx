@@ -28,7 +28,9 @@ const sizeColors: Record<string, string> = {
   SMALL: "bg-blue-100 text-blue-700",
   MEDIUM: "bg-amber-100 text-amber-700",
   LARGE: "bg-orange-100 text-orange-700",
-  EXTRA_LARGE: "bg-red-100 text-red-700",
+  XL: "bg-red-100 text-red-700",
+  XXL: "bg-purple-100 text-purple-700",
+  PALLET: "bg-gray-100 text-gray-700",
 };
 
 export default async function MarketplacePage() {
@@ -95,7 +97,9 @@ export default async function MarketplacePage() {
                   <option>Small</option>
                   <option>Medium</option>
                   <option>Large</option>
-                  <option>Extra Large</option>
+                  <option>XL</option>
+                  <option>XXL</option>
+                  <option>Pallets</option>
                 </select>
               </div>
             </div>
@@ -171,11 +175,11 @@ export default async function MarketplacePage() {
                       <span className="text-lg font-bold text-orange-600">
                         {formatPrice(delivery.price)}
                       </span>
-                      {delivery.scheduledDate && (
+                      {delivery.pickupDate && (
                         <span className="flex items-center gap-1 text-xs text-gray-500">
                           <Clock className="h-3.5 w-3.5" />
                           {new Date(
-                            delivery.scheduledDate
+                            delivery.pickupDate
                           ).toLocaleDateString()}
                         </span>
                       )}

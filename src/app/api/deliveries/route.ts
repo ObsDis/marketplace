@@ -24,8 +24,13 @@ const createDeliverySchema = z.object({
   dropoffContact: z.string().optional(),
   dropoffPhone: z.string().optional(),
   dropoffNotes: z.string().optional(),
+  images: z.array(z.string().url()).optional(),
   price: z.number().positive("Price must be positive"),
-  scheduledDate: z.string().datetime().optional(),
+  pickupDate: z.string().optional(),
+  pickupTime: z.string().optional(),
+  deliveryDate: z.string().optional(),
+  deliveryTime: z.string().optional(),
+  latestDeliveryTime: z.string().optional(),
 });
 
 export async function GET(request: NextRequest) {
@@ -102,10 +107,13 @@ export async function POST(request: Request) {
         dropoffContact: parsed.dropoffContact,
         dropoffPhone: parsed.dropoffPhone,
         dropoffNotes: parsed.dropoffNotes,
+        images: parsed.images ?? [],
         price: parsed.price,
-        scheduledDate: parsed.scheduledDate
-          ? new Date(parsed.scheduledDate)
-          : undefined,
+        pickupDate: parsed.pickupDate ? new Date(parsed.pickupDate) : undefined,
+        pickupTime: parsed.pickupTime,
+        deliveryDate: parsed.deliveryDate ? new Date(parsed.deliveryDate) : undefined,
+        deliveryTime: parsed.deliveryTime,
+        latestDeliveryTime: parsed.latestDeliveryTime,
       },
     });
 

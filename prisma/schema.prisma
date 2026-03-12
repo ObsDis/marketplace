@@ -100,10 +100,15 @@ model Delivery {
   dropoffContact  String?
   dropoffPhone    String?
   dropoffNotes    String?
+  images          String[]
   price           Float
   distance        Float?
   status          DeliveryStatus @default(POSTED)
-  scheduledDate   DateTime?
+  pickupDate      DateTime?
+  pickupTime      String?
+  deliveryDate    DateTime?
+  deliveryTime    String?
+  latestDeliveryTime String?
   pickedUpAt      DateTime?
   deliveredAt     DateTime?
   trackingNote    String?
@@ -118,11 +123,11 @@ model Delivery {
 }
 
 enum PackageSize {
-  ENVELOPE
   SMALL
   MEDIUM
   LARGE
-  EXTRA_LARGE
+  XL
+  XXL
   PALLET
 }
 

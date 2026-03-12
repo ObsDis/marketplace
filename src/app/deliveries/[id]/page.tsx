@@ -41,12 +41,12 @@ const timelineSteps = [
 ];
 
 const sizeLabels: Record<string, string> = {
-  ENVELOPE: "Envelope",
   SMALL: "Small",
   MEDIUM: "Medium",
   LARGE: "Large",
-  EXTRA_LARGE: "Extra Large",
-  PALLET: "Pallet",
+  XL: "XL",
+  XXL: "XXL",
+  PALLET: "Pallets",
 };
 
 function getTimelineIndex(status: string) {
@@ -255,10 +255,27 @@ export default async function DeliveryDetailPage({
             <h3 className="text-sm font-semibold uppercase tracking-wider text-gray-400">
               Schedule
             </h3>
-            {delivery.scheduledDate ? (
-              <p className="mt-2 text-sm font-medium text-gray-900">
-                {formatDate(delivery.scheduledDate)}
-              </p>
+            {delivery.pickupDate ? (
+              <div className="mt-2 space-y-1">
+                <p className="text-sm text-gray-900">
+                  <span className="font-medium">Pickup:</span>{" "}
+                  {new Date(delivery.pickupDate).toLocaleDateString()}
+                  {delivery.pickupTime && ` at ${delivery.pickupTime}`}
+                </p>
+                {delivery.deliveryDate && (
+                  <p className="text-sm text-gray-900">
+                    <span className="font-medium">Delivery:</span>{" "}
+                    {new Date(delivery.deliveryDate).toLocaleDateString()}
+                    {delivery.deliveryTime && ` at ${delivery.deliveryTime}`}
+                  </p>
+                )}
+                {delivery.latestDeliveryTime && (
+                  <p className="text-sm text-gray-900">
+                    <span className="font-medium">Latest:</span>{" "}
+                    {delivery.latestDeliveryTime}
+                  </p>
+                )}
+              </div>
             ) : (
               <p className="mt-2 text-sm text-gray-400">ASAP</p>
             )}
@@ -267,6 +284,25 @@ export default async function DeliveryDetailPage({
             </p>
           </div>
         </div>
+
+        {/* Item Photos */}
+        {delivery.images && delivery.images.length > 0 && (
+          <div className="mt-4 rounded-xl bg-white p-6 shadow-sm">
+            <h3 className="text-sm font-semibold uppercase tracking-wider text-gray-400">
+              Item Photos
+            </h3>
+            <div className="mt-3 flex flex-wrap gap-3">
+              {delivery.images.map((src: string, i: number) => (
+                <img
+                  key={i}
+                  src={src}
+                  alt={`Item ${i + 1}`}
+                  className="h-32 w-32 rounded-lg object-cover border border-gray-200"
+                />
+              ))}
+            </div>
+          </div>
+        )}
 
         {/* Driver Info */}
         {delivery.driver && (
