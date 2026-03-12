@@ -63,14 +63,14 @@ export function Navbar() {
 
         {/* Desktop nav */}
         <div className="hidden items-center gap-1 md:flex">
-          <Button variant="ghost" size="sm" asChild>
-            <Link href="/marketplace">Browse Deliveries</Link>
+          <Button variant="ghost" size="sm" render={<Link href="/marketplace" />}>
+            Browse Deliveries
           </Button>
-          <Button variant="ghost" size="sm" asChild>
-            <Link href="/deliveries/new">Post Delivery</Link>
+          <Button variant="ghost" size="sm" render={<Link href="/deliveries/new" />}>
+            Post Delivery
           </Button>
-          <Button variant="ghost" size="sm" asChild>
-            <Link href="/pricing">Pricing</Link>
+          <Button variant="ghost" size="sm" render={<Link href="/pricing" />}>
+            Pricing
           </Button>
         </div>
 
@@ -81,8 +81,8 @@ export function Navbar() {
               <span className="text-sm font-medium text-muted-foreground">
                 {displayName}
               </span>
-              <Button variant="outline" size="sm" asChild>
-                <Link href={dashboardHref}>Dashboard</Link>
+              <Button variant="outline" size="sm" render={<Link href={dashboardHref} />}>
+                Dashboard
               </Button>
               <Button
                 variant="ghost"
@@ -94,11 +94,11 @@ export function Navbar() {
             </>
           ) : (
             <>
-              <Button variant="outline" size="sm" asChild>
-                <Link href="/auth/signin">Sign In</Link>
+              <Button variant="outline" size="sm" render={<Link href="/auth/signin" />}>
+                Sign In
               </Button>
-              <Button size="sm" asChild>
-                <Link href="/auth/signup">Sign Up</Link>
+              <Button size="sm" render={<Link href="/auth/signup" />}>
+                Sign Up
               </Button>
             </>
           )}
@@ -128,20 +128,14 @@ export function Navbar() {
       >
         <div className="border-t bg-white px-4 pb-4 pt-2">
           <div className="flex flex-col gap-1">
-            <Button variant="ghost" size="sm" className="justify-start" asChild>
-              <Link href="/marketplace" onClick={() => setMobileOpen(false)}>
-                Browse Deliveries
-              </Link>
+            <Button variant="ghost" size="sm" className="justify-start" render={<Link href="/marketplace" onClick={() => setMobileOpen(false)} />}>
+              Browse Deliveries
             </Button>
-            <Button variant="ghost" size="sm" className="justify-start" asChild>
-              <Link href="/deliveries/new" onClick={() => setMobileOpen(false)}>
-                Post Delivery
-              </Link>
+            <Button variant="ghost" size="sm" className="justify-start" render={<Link href="/deliveries/new" onClick={() => setMobileOpen(false)} />}>
+              Post Delivery
             </Button>
-            <Button variant="ghost" size="sm" className="justify-start" asChild>
-              <Link href="/pricing" onClick={() => setMobileOpen(false)}>
-                Pricing
-              </Link>
+            <Button variant="ghost" size="sm" className="justify-start" render={<Link href="/pricing" onClick={() => setMobileOpen(false)} />}>
+              Pricing
             </Button>
           </div>
 
@@ -153,10 +147,8 @@ export function Navbar() {
                 <span className="px-3 text-sm font-medium text-muted-foreground">
                   {displayName}
                 </span>
-                <Button variant="outline" size="sm" className="w-full" asChild>
-                  <Link href={dashboardHref} onClick={() => setMobileOpen(false)}>
-                    Dashboard
-                  </Link>
+                <Button variant="outline" size="sm" className="w-full" render={<Link href={dashboardHref} onClick={() => setMobileOpen(false)} />}>
+                  Dashboard
                 </Button>
                 <Button
                   variant="ghost"
@@ -169,15 +161,11 @@ export function Navbar() {
               </>
             ) : (
               <>
-                <Button variant="outline" size="sm" className="w-full" asChild>
-                  <Link href="/auth/signin" onClick={() => setMobileOpen(false)}>
-                    Sign In
-                  </Link>
+                <Button variant="outline" size="sm" className="w-full" render={<Link href="/auth/signin" onClick={() => setMobileOpen(false)} />}>
+                  Sign In
                 </Button>
-                <Button size="sm" className="w-full" asChild>
-                  <Link href="/auth/signup" onClick={() => setMobileOpen(false)}>
-                    Sign Up
-                  </Link>
+                <Button size="sm" className="w-full" render={<Link href="/auth/signup" onClick={() => setMobileOpen(false)} />}>
+                  Sign Up
                 </Button>
               </>
             )}
