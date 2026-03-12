@@ -6,6 +6,7 @@ import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import { Menu, X, Truck } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { Separator } from "@/components/ui/separator";
 import type { User } from "@supabase/supabase-js";
 
 export function Navbar() {
@@ -34,6 +35,7 @@ export function Navbar() {
   const handleSignOut = async () => {
     const supabase = createClient();
     await supabase.auth.signOut();
+    setMobileOpen(false);
     router.push("/");
     router.refresh();
   };
@@ -51,50 +53,39 @@ export function Navbar() {
         : "/deliveries/new";
 
   return (
-    <nav className="sticky top-0 z-40 w-full border-b bg-white shadow-sm">
+    <nav className="sticky top-0 z-40 w-full border-b bg-white/95 backdrop-blur supports-[backdrop-filter]:bg-white/80 shadow-sm">
       <div className="mx-auto flex h-16 max-w-7xl items-center justify-between px-4 sm:px-6 lg:px-8">
         {/* Logo */}
-        <Link href="/" className="flex items-center gap-2 text-xl font-bold text-orange-600">
+        <Link href="/" className="flex items-center gap-2 text-xl font-bold text-primary transition-opacity hover:opacity-80">
           <Truck className="h-6 w-6" />
           Sprint Cargo
         </Link>
 
         {/* Desktop nav */}
-        <div className="hidden items-center gap-6 md:flex">
-          <Link
-            href="/marketplace"
-            className="text-sm font-medium text-gray-700 hover:text-orange-600 transition-colors"
-          >
-            Browse Deliveries
-          </Link>
-          <Link
-            href="/deliveries/new"
-            className="text-sm font-medium text-gray-700 hover:text-orange-600 transition-colors"
-          >
-            Post Delivery
-          </Link>
-          <Link
-            href="/pricing"
-            className="text-sm font-medium text-gray-700 hover:text-orange-600 transition-colors"
-          >
-            Pricing
-          </Link>
+        <div className="hidden items-center gap-1 md:flex">
+          <Button variant="ghost" size="sm" asChild>
+            <Link href="/marketplace">Browse Deliveries</Link>
+          </Button>
+          <Button variant="ghost" size="sm" asChild>
+            <Link href="/deliveries/new">Post Delivery</Link>
+          </Button>
+          <Button variant="ghost" size="sm" asChild>
+            <Link href="/pricing">Pricing</Link>
+          </Button>
         </div>
 
         {/* Desktop right side */}
         <div className="hidden items-center gap-3 md:flex">
           {user ? (
             <>
-              <span className="text-sm text-gray-700">
+              <span className="text-sm font-medium text-muted-foreground">
                 {displayName}
               </span>
-              <Link href={dashboardHref}>
-                <Button variant="outline" size="sm">
-                  Dashboard
-                </Button>
-              </Link>
+              <Button variant="outline" size="sm" asChild>
+                <Link href={dashboardHref}>Dashboard</Link>
+              </Button>
               <Button
-                variant="secondary"
+                variant="ghost"
                 size="sm"
                 onClick={handleSignOut}
               >
@@ -103,74 +94,72 @@ export function Navbar() {
             </>
           ) : (
             <>
-              <Link href="/auth/signin">
-                <Button variant="outline" size="sm">
-                  Sign In
-                </Button>
-              </Link>
-              <Link href="/auth/signup">
-                <Button size="sm" className="bg-orange-600 hover:bg-orange-500 text-white">
-                  Sign Up
-                </Button>
-              </Link>
+              <Button variant="outline" size="sm" asChild>
+                <Link href="/auth/signin">Sign In</Link>
+              </Button>
+              <Button size="sm" asChild>
+                <Link href="/auth/signup">Sign Up</Link>
+              </Button>
             </>
           )}
         </div>
 
         {/* Mobile hamburger */}
-        <button
-          className="rounded-lg p-2 text-gray-600 hover:bg-gray-100 md:hidden"
+        <Button
+          variant="ghost"
+          size="icon"
+          className="md:hidden"
           onClick={() => setMobileOpen(!mobileOpen)}
           aria-label={mobileOpen ? "Close menu" : "Open menu"}
         >
           {mobileOpen ? (
-            <X className="h-6 w-6" />
+            <X className="h-5 w-5" />
           ) : (
-            <Menu className="h-6 w-6" />
+            <Menu className="h-5 w-5" />
           )}
-        </button>
+        </Button>
       </div>
 
       {/* Mobile menu */}
-      {mobileOpen && (
-        <div className="border-t bg-white px-4 pb-4 pt-2 md:hidden">
-          <div className="space-y-1">
-            <Link
-              href="/marketplace"
-              className="block rounded-lg px-3 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50"
-              onClick={() => setMobileOpen(false)}
-            >
-              Browse Deliveries
-            </Link>
-            <Link
-              href="/deliveries/new"
-              className="block rounded-lg px-3 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50"
-              onClick={() => setMobileOpen(false)}
-            >
-              Post Delivery
-            </Link>
-            <Link
-              href="/pricing"
-              className="block rounded-lg px-3 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50"
-              onClick={() => setMobileOpen(false)}
-            >
-              Pricing
-            </Link>
+      <div
+        className={`overflow-hidden transition-all duration-200 ease-in-out md:hidden ${
+          mobileOpen ? "max-h-96 opacity-100" : "max-h-0 opacity-0"
+        }`}
+      >
+        <div className="border-t bg-white px-4 pb-4 pt-2">
+          <div className="flex flex-col gap-1">
+            <Button variant="ghost" size="sm" className="justify-start" asChild>
+              <Link href="/marketplace" onClick={() => setMobileOpen(false)}>
+                Browse Deliveries
+              </Link>
+            </Button>
+            <Button variant="ghost" size="sm" className="justify-start" asChild>
+              <Link href="/deliveries/new" onClick={() => setMobileOpen(false)}>
+                Post Delivery
+              </Link>
+            </Button>
+            <Button variant="ghost" size="sm" className="justify-start" asChild>
+              <Link href="/pricing" onClick={() => setMobileOpen(false)}>
+                Pricing
+              </Link>
+            </Button>
           </div>
 
-          <div className="mt-4 flex flex-col gap-2 border-t pt-4">
+          <Separator className="my-3" />
+
+          <div className="flex flex-col gap-2">
             {user ? (
               <>
-                <span className="px-3 text-sm text-gray-700">
+                <span className="px-3 text-sm font-medium text-muted-foreground">
                   {displayName}
                 </span>
-                <Link href={dashboardHref} onClick={() => setMobileOpen(false)}>
-                  <Button variant="outline" size="sm" className="w-full">
+                <Button variant="outline" size="sm" className="w-full" asChild>
+                  <Link href={dashboardHref} onClick={() => setMobileOpen(false)}>
                     Dashboard
-                  </Button>
-                </Link>
+                  </Link>
+                </Button>
                 <Button
-                  variant="secondary"
+                  variant="ghost"
                   size="sm"
                   className="w-full"
                   onClick={handleSignOut}
@@ -180,27 +169,21 @@ export function Navbar() {
               </>
             ) : (
               <>
-                <Link
-                  href="/auth/signin"
-                  onClick={() => setMobileOpen(false)}
-                >
-                  <Button variant="outline" size="sm" className="w-full">
+                <Button variant="outline" size="sm" className="w-full" asChild>
+                  <Link href="/auth/signin" onClick={() => setMobileOpen(false)}>
                     Sign In
-                  </Button>
-                </Link>
-                <Link
-                  href="/auth/signup"
-                  onClick={() => setMobileOpen(false)}
-                >
-                  <Button size="sm" className="w-full bg-orange-600 hover:bg-orange-500 text-white">
+                  </Link>
+                </Button>
+                <Button size="sm" className="w-full" asChild>
+                  <Link href="/auth/signup" onClick={() => setMobileOpen(false)}>
                     Sign Up
-                  </Button>
-                </Link>
+                  </Link>
+                </Button>
               </>
             )}
           </div>
         </div>
-      )}
+      </div>
     </nav>
   );
 }

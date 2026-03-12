@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { Plus } from "lucide-react";
 import { db } from "@/lib/db";
+import { Button } from "@/components/ui/button";
 import DeliveryList from "./DeliveryList";
 
 export const dynamic = "force-dynamic";
@@ -31,26 +32,23 @@ export default async function MarketplacePage() {
   }));
 
   return (
-    <div className="min-h-screen bg-gray-50">
+    <div className="min-h-screen bg-background">
       {/* Header */}
-      <section className="border-b bg-white">
-        <div className="mx-auto max-w-7xl px-4 py-12 sm:px-6 lg:px-8">
+      <section className="border-b bg-card">
+        <div className="mx-auto max-w-7xl px-4 py-10 sm:px-6 lg:px-8">
           <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
             <div>
-              <h1 className="text-3xl font-bold tracking-tight text-gray-900 sm:text-4xl">
+              <h1 className="text-3xl font-bold tracking-tight text-foreground sm:text-4xl">
                 Available Deliveries
               </h1>
-              <p className="mt-2 text-lg text-gray-600">
+              <p className="mt-2 text-base text-muted-foreground">
                 Browse open delivery jobs near you
               </p>
             </div>
-            <Link
-              href="/deliveries/new"
-              className="inline-flex items-center gap-2 rounded-full bg-orange-600 px-6 py-3 text-sm font-semibold text-white shadow transition hover:bg-orange-500 hover:shadow-md"
-            >
-              <Plus className="h-4 w-4" />
+            <Button size="lg" render={<Link href="/deliveries/new" />}>
+              <Plus className="size-4" />
               Post a Delivery
-            </Link>
+            </Button>
           </div>
         </div>
       </section>

@@ -2,15 +2,26 @@
 
 import { useMemo, useState } from "react";
 import Link from "next/link";
+import { MapPin, Package, Clock, Search, Plus } from "lucide-react";
+
 import {
-  MapPin,
-  Package,
-  Clock,
-  Search,
-  Filter,
-  Plus,
-  ArrowUpDown,
-} from "lucide-react";
+  Card,
+  CardHeader,
+  CardTitle,
+  CardContent,
+  CardFooter,
+} from "@/components/ui/card";
+import { Badge } from "@/components/ui/badge";
+import { Input } from "@/components/ui/input";
+import {
+  Select,
+  SelectTrigger,
+  SelectValue,
+  SelectContent,
+  SelectItem,
+} from "@/components/ui/select";
+import { Button } from "@/components/ui/button";
+import { Separator } from "@/components/ui/separator";
 
 type Delivery = {
   id: string;
@@ -45,17 +56,19 @@ function formatPrice(price: number): string {
   }).format(price);
 }
 
-const sizeColors: Record<string, string> = {
-  SMALL: "bg-blue-100 text-blue-700",
-  MEDIUM: "bg-amber-100 text-amber-700",
-  LARGE: "bg-orange-100 text-orange-700",
-  XL: "bg-red-100 text-red-700",
-  XXL: "bg-purple-100 text-purple-700",
-  PALLET: "bg-gray-100 text-gray-700",
+type BadgeVariant = "default" | "secondary" | "outline" | "destructive";
+
+const sizeBadgeVariant: Record<string, BadgeVariant> = {
+  SMALL: "secondary",
+  MEDIUM: "outline",
+  LARGE: "default",
+  XL: "default",
+  XXL: "destructive",
+  PALLET: "secondary",
 };
 
 const SIZE_OPTIONS = [
-  { value: "", label: "All Sizes" },
+  { value: "ALL", label: "All Sizes" },
   { value: "SMALL", label: "Small" },
   { value: "MEDIUM", label: "Medium" },
   { value: "LARGE", label: "Large" },
@@ -78,7 +91,7 @@ export default function DeliveryList({
   deliveries: Delivery[];
 }) {
   const [searchQuery, setSearchQuery] = useState("");
-  const [sizeFilter, setSizeFilter] = useState("");
+  const [sizeFilter, setSizeFilter] = useState("ALL");
   const [sortOption, setSortOption] = useState<SortOption>("newest");
 
   const filtered = useMemo(() => {
@@ -96,7 +109,7 @@ export default function DeliveryList({
     }
 
     // Package size filter
-    if (sizeFilter) {
+    if (sizeFilter && sizeFilter !== "ALL") {
       results = results.filter((d) => d.packageSize === sizeFilter);
     }
 
@@ -116,48 +129,52 @@ export default function DeliveryList({
   return (
     <>
       {/* Search / Filter Bar */}
-      <section className="border-b bg-white">
-        <div className="mx-auto max-w-7xl px-4 py-4 sm:px-6 lg:px-8">
+      <section className="sticky top-0 z-10 border-b bg-card/95 backdrop-blur supports-[backdrop-filter]:bg-card/80">
+        <div className="mx-auto max-w-7xl px-4 py-3 sm:px-6 lg:px-8">
           <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
             <div className="relative flex-1">
-              <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400" />
-              <input
+              <Search className="pointer-events-none absolute left-2.5 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
+              <Input
                 type="text"
                 placeholder="Search by city or keyword..."
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
-                className="w-full rounded-lg border border-gray-300 bg-white py-2.5 pl-10 pr-4 text-sm text-gray-900 placeholder:text-gray-400 focus:border-orange-500 focus:outline-none focus:ring-2 focus:ring-orange-500/20"
+                className="pl-9"
               />
             </div>
-            <div className="flex gap-3">
-              <div className="relative">
-                <Package className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400" />
-                <select
-                  value={sizeFilter}
-                  onChange={(e) => setSizeFilter(e.target.value)}
-                  className="appearance-none rounded-lg border border-gray-300 bg-white py-2.5 pl-10 pr-8 text-sm text-gray-700 focus:border-orange-500 focus:outline-none focus:ring-2 focus:ring-orange-500/20"
-                >
+            <div className="flex gap-2">
+              <Select
+                value={sizeFilter}
+                onValueChange={(val) => setSizeFilter(val as string)}
+              >
+                <SelectTrigger className="w-[140px]">
+                  <Package className="size-4 text-muted-foreground" />
+                  <SelectValue placeholder="All Sizes" />
+                </SelectTrigger>
+                <SelectContent>
                   {SIZE_OPTIONS.map((opt) => (
-                    <option key={opt.value} value={opt.value}>
+                    <SelectItem key={opt.value} value={opt.value}>
                       {opt.label}
-                    </option>
+                    </SelectItem>
                   ))}
-                </select>
-              </div>
-              <div className="relative">
-                <ArrowUpDown className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400" />
-                <select
-                  value={sortOption}
-                  onChange={(e) => setSortOption(e.target.value as SortOption)}
-                  className="appearance-none rounded-lg border border-gray-300 bg-white py-2.5 pl-10 pr-8 text-sm text-gray-700 focus:border-orange-500 focus:outline-none focus:ring-2 focus:ring-orange-500/20"
-                >
+                </SelectContent>
+              </Select>
+
+              <Select
+                value={sortOption}
+                onValueChange={(val) => setSortOption(val as SortOption)}
+              >
+                <SelectTrigger className="w-[170px]">
+                  <SelectValue placeholder="Sort by" />
+                </SelectTrigger>
+                <SelectContent>
                   {SORT_OPTIONS.map((opt) => (
-                    <option key={opt.value} value={opt.value}>
+                    <SelectItem key={opt.value} value={opt.value}>
                       {opt.label}
-                    </option>
+                    </SelectItem>
                   ))}
-                </select>
-              </div>
+                </SelectContent>
+              </Select>
             </div>
           </div>
         </div>
@@ -166,113 +183,115 @@ export default function DeliveryList({
       {/* Delivery Grid */}
       <section className="mx-auto max-w-7xl px-4 py-8 sm:px-6 lg:px-8">
         {deliveries.length === 0 ? (
-          <div className="flex flex-col items-center justify-center rounded-2xl border-2 border-dashed border-gray-300 bg-white px-6 py-20 text-center">
-            <Package className="h-12 w-12 text-gray-400" />
-            <h3 className="mt-4 text-lg font-semibold text-gray-900">
+          <Card className="flex flex-col items-center justify-center border-dashed px-6 py-20 text-center">
+            <Package className="size-12 text-muted-foreground" />
+            <h3 className="mt-4 text-lg font-semibold text-foreground">
               No deliveries posted yet
             </h3>
-            <p className="mt-2 text-sm text-gray-600">
+            <p className="mt-2 text-sm text-muted-foreground">
               Be the first to post a delivery!
             </p>
-            <Link
-              href="/deliveries/new"
-              className="mt-6 inline-flex items-center gap-2 rounded-full bg-orange-600 px-6 py-2.5 text-sm font-semibold text-white shadow transition hover:bg-orange-500"
-            >
-              <Plus className="h-4 w-4" />
+            <Button className="mt-6" render={<Link href="/deliveries/new" />}>
+              <Plus className="size-4" />
               Post a Delivery
-            </Link>
-          </div>
+            </Button>
+          </Card>
         ) : filtered.length === 0 ? (
-          <div className="flex flex-col items-center justify-center rounded-2xl border-2 border-dashed border-gray-300 bg-white px-6 py-20 text-center">
-            <Search className="h-12 w-12 text-gray-400" />
-            <h3 className="mt-4 text-lg font-semibold text-gray-900">
+          <Card className="flex flex-col items-center justify-center border-dashed px-6 py-20 text-center">
+            <Search className="size-12 text-muted-foreground" />
+            <h3 className="mt-4 text-lg font-semibold text-foreground">
               No deliveries match your filters
             </h3>
-            <p className="mt-2 text-sm text-gray-600">
+            <p className="mt-2 text-sm text-muted-foreground">
               Try adjusting your search or filter criteria.
             </p>
-            <button
+            <Button
+              variant="outline"
+              className="mt-6"
               onClick={() => {
                 setSearchQuery("");
-                setSizeFilter("");
+                setSizeFilter("ALL");
                 setSortOption("newest");
               }}
-              className="mt-6 inline-flex items-center gap-2 rounded-full bg-orange-600 px-6 py-2.5 text-sm font-semibold text-white shadow transition hover:bg-orange-500"
             >
               Clear Filters
-            </button>
-          </div>
+            </Button>
+          </Card>
         ) : (
           <>
-            <p className="mb-6 text-sm text-gray-500">
+            <p className="mb-6 text-sm text-muted-foreground">
               Showing {filtered.length} of {deliveries.length} deliver
               {deliveries.length !== 1 ? "ies" : "y"}
             </p>
-            <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
+            <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
               {filtered.map((delivery) => (
-                <div
+                <Card
                   key={delivery.id}
-                  className="group flex flex-col rounded-xl border border-gray-200 bg-white shadow-sm transition hover:border-orange-200 hover:shadow-md"
+                  className="transition hover:ring-2 hover:ring-primary/30"
                 >
-                  <div className="flex-1 p-6">
+                  <CardHeader>
                     <div className="flex items-start justify-between gap-2">
-                      <h3 className="text-base font-semibold text-gray-900 group-hover:text-orange-700">
+                      <CardTitle className="line-clamp-1">
                         {delivery.title}
-                      </h3>
-                      <span
-                        className={`flex-shrink-0 rounded-full px-2.5 py-0.5 text-xs font-medium ${
-                          sizeColors[delivery.packageSize] ||
-                          "bg-gray-100 text-gray-700"
-                        }`}
+                      </CardTitle>
+                      <Badge
+                        variant={
+                          sizeBadgeVariant[delivery.packageSize] || "secondary"
+                        }
+                        className="shrink-0"
                       >
                         {delivery.packageSize.replace("_", " ")}
-                      </span>
+                      </Badge>
                     </div>
+                  </CardHeader>
 
+                  <CardContent className="space-y-3">
                     {/* Route */}
-                    <div className="mt-4 space-y-2">
-                      <div className="flex items-center gap-2 text-sm text-gray-600">
-                        <MapPin className="h-4 w-4 flex-shrink-0 text-green-500" />
+                    <div className="space-y-1.5">
+                      <div className="flex items-center gap-2 text-sm text-foreground">
+                        <MapPin className="size-4 shrink-0 text-green-600" />
                         <span>
                           {delivery.pickupCity}, {delivery.pickupState}
                         </span>
                       </div>
-                      <div className="ml-2 border-l-2 border-dashed border-gray-200 py-1" />
-                      <div className="flex items-center gap-2 text-sm text-gray-600">
-                        <MapPin className="h-4 w-4 flex-shrink-0 text-orange-500" />
+                      <div className="ml-2 border-l-2 border-dashed border-border py-0.5" />
+                      <div className="flex items-center gap-2 text-sm text-foreground">
+                        <MapPin className="size-4 shrink-0 text-primary" />
                         <span>
                           {delivery.dropoffCity}, {delivery.dropoffState}
                         </span>
                       </div>
                     </div>
 
+                    <Separator />
+
                     {/* Price and Date */}
-                    <div className="mt-4 flex items-center justify-between">
-                      <span className="text-lg font-bold text-orange-600">
+                    <div className="flex items-center justify-between">
+                      <span className="text-lg font-bold text-primary">
                         {formatPrice(delivery.price)}
                       </span>
                       {delivery.pickupDate && (
-                        <span className="flex items-center gap-1 text-xs text-gray-500">
-                          <Clock className="h-3.5 w-3.5" />
+                        <span className="flex items-center gap-1 text-xs text-muted-foreground">
+                          <Clock className="size-3.5" />
                           {new Date(delivery.pickupDate).toLocaleDateString()}
                         </span>
                       )}
                     </div>
-                  </div>
+                  </CardContent>
 
-                  {/* Footer */}
-                  <div className="flex items-center justify-between border-t border-gray-100 px-6 py-3">
-                    <span className="text-xs text-gray-400">
+                  <CardFooter className="flex items-center justify-between">
+                    <span className="text-xs text-muted-foreground">
                       {timeAgo(new Date(delivery.createdAt))}
                     </span>
-                    <Link
-                      href={`/deliveries/${delivery.id}`}
-                      className="text-sm font-medium text-orange-600 transition hover:text-orange-500"
+                    <Button
+                      variant="link"
+                      size="sm"
+                      render={<Link href={`/deliveries/${delivery.id}`} />}
                     >
                       View Details &rarr;
-                    </Link>
-                  </div>
-                </div>
+                    </Button>
+                  </CardFooter>
+                </Card>
               ))}
             </div>
           </>
