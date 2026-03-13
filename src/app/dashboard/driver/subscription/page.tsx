@@ -78,7 +78,7 @@ export default async function SubscriptionPage() {
     }
   }
 
-  const totalEarnings = driver.deliveries.reduce((sum, d) => sum + d.price, 0);
+  const totalEarnings = driver.deliveries.reduce((sum: number, d: { price: number | null }) => sum + (d.price ?? 0), 0);
   const status = driver.subscriptionStatus;
 
   return (
@@ -182,7 +182,7 @@ export default async function SubscriptionPage() {
                       Your subscription is active
                     </h2>
                     <p className="text-sm text-gray-500">
-                      Driver Pro Plan &mdash; $99.99/month
+                      Driver Pro Plan &mdash; $99/month
                     </p>
                   </div>
                 </div>
@@ -250,7 +250,7 @@ export default async function SubscriptionPage() {
                   </h2>
                   <div className="mt-4 flex items-baseline justify-center gap-1">
                     <span className="text-5xl font-extrabold tracking-tight text-gray-900">
-                      $99.99
+                      $99
                     </span>
                     <span className="text-lg font-medium text-gray-500">
                       /month

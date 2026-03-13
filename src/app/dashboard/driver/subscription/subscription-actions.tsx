@@ -28,7 +28,7 @@ export function SubscribeButton() {
       disabled={loading}
       className="inline-flex items-center rounded-lg bg-orange-600 px-6 py-3 text-sm font-semibold text-white shadow transition hover:bg-orange-500 disabled:opacity-50"
     >
-      {loading ? "Redirecting to Stripe..." : "Subscribe for $99.99/mo"}
+      {loading ? "Redirecting to Stripe..." : "Subscribe for $99/mo"}
     </button>
   );
 }

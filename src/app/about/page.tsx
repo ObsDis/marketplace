@@ -18,7 +18,7 @@ export default function AboutPage() {
             <p className="mt-3">
               Traditional delivery platforms take 20–30% of every delivery as
               commission. Sprint Cargo flips that model. Drivers pay a flat
-              $99.99/month subscription and keep 100% of their delivery earnings
+              $99/month subscription and keep 100% of their delivery earnings
               minus standard credit card processing fees (2.9% + $0.30).
             </p>
           </section>

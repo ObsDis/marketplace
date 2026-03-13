@@ -3,289 +3,21 @@
 import { useState, useEffect, useCallback } from "react";
 import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
-import { loadStripe } from "@stripe/stripe-js";
-import {
-  Elements,
-  PaymentElement,
-  useStripe,
-  useElements,
-} from "@stripe/react-stripe-js";
 import PackageSizeSelector from "@/components/delivery/PackageSizeSelector";
 
-const stripePromise = loadStripe(
-  process.env.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY!
-);
+type DeliverySpeed = "STANDARD" | "SAME_DAY" | "RUSH";
 
-// Price estimation based on size, weight, item count, and distance
-function estimatePrice(
-  size: string,
-  weight: number,
-  count: number,
-  distance: number
-): number {
-  const basePrices: Record<string, number> = {
-    SMALL: 25,
-    MEDIUM: 50,
-    LARGE: 85,
-    XL: 130,
-    XXL: 200,
-    PALLET: 350,
-  };
+const speedOptions: { value: DeliverySpeed; label: string; desc: string }[] = [
+  { value: "STANDARD", label: "Standard", desc: "Flexible timing" },
+  { value: "SAME_DAY", label: "Same Day", desc: "Delivered today" },
+  { value: "RUSH", label: "Rush", desc: "ASAP pickup & delivery" },
+];
 
-  const perMileRates: Record<string, number> = {
-    SMALL: 1.0,
-    MEDIUM: 1.25,
-    LARGE: 1.5,
-    XL: 1.75,
-    XXL: 2.0,
-    PALLET: 2.5,
-  };
-
-  const base = basePrices[size] || 50;
-  const perMile = perMileRates[size] || 1.25;
-
-  const distanceSurcharge = distance > 5 ? (distance - 5) * perMile : 0;
-  const weightSurcharge = weight > 20 ? (weight - 20) * 0.5 : 0;
-  const countSurcharge = count > 1 ? (count - 1) * base * 0.3 : 0;
-
-  return Math.round((base + distanceSurcharge + weightSurcharge + countSurcharge) * 100) / 100;
-}
-
-// ─── Inner form that has access to Stripe hooks ─────────────
-function CheckoutForm({
-  clientSecret,
-  paymentIntentId,
-  form,
-  imageFiles,
-  imagePreviews,
-  onBack,
-}: {
-  clientSecret: string;
-  paymentIntentId: string;
-  form: Record<string, string>;
-  imageFiles: File[];
-  imagePreviews: string[];
-  onBack: () => void;
-}) {
-  const stripe = useStripe();
-  const elements = useElements();
-  const router = useRouter();
-  const [submitting, setSubmitting] = useState(false);
-  const [error, setError] = useState("");
-
-  async function handlePayAndPost(e: React.FormEvent) {
-    e.preventDefault();
-    if (!stripe || !elements) return;
-
-    setSubmitting(true);
-    setError("");
-
-    try {
-      // 1. Confirm payment
-      const { error: paymentError } = await stripe.confirmPayment({
-        elements,
-        confirmParams: {
-          return_url: window.location.href, // fallback, we handle redirect ourselves
-        },
-        redirect: "if_required",
-      });
-
-      if (paymentError) {
-        setError(paymentError.message || "Payment failed");
-        setSubmitting(false);
-        return;
-      }
-
-      // 2. Upload images if any
-      let imageUrls: string[] = [];
-      if (imageFiles.length > 0) {
-        const formData = new FormData();
-        imageFiles.forEach((file) => formData.append("files", file));
-
-        const uploadRes = await fetch("/api/upload", {
-          method: "POST",
-          body: formData,
-        });
-
-        if (!uploadRes.ok) {
-          const data = await uploadRes.json().catch(() => ({}));
-          throw new Error(data.error || "Failed to upload images");
-        }
-
-        const uploadData = await uploadRes.json();
-        imageUrls = uploadData.urls;
-      }
-
-      // 3. Create delivery with payment reference
-      const body = {
-        title: form.title,
-        description: form.description || undefined,
-        packageSize: form.packageSize,
-        packageWeight: form.packageWeight
-          ? parseFloat(form.packageWeight)
-          : undefined,
-        packageCount: parseInt(form.packageCount) || 1,
-        pickupAddress: form.pickupAddress,
-        pickupCity: form.pickupCity,
-        pickupState: form.pickupState,
-        pickupZip: form.pickupZip,
-        pickupContact: form.pickupContact || undefined,
-        pickupPhone: form.pickupPhone || undefined,
-        pickupNotes: form.pickupNotes || undefined,
-        dropoffAddress: form.dropoffAddress,
-        dropoffCity: form.dropoffCity,
-        dropoffState: form.dropoffState,
-        dropoffZip: form.dropoffZip,
-        dropoffContact: form.dropoffContact || undefined,
-        dropoffPhone: form.dropoffPhone || undefined,
-        dropoffNotes: form.dropoffNotes || undefined,
-        images: imageUrls.length > 0 ? imageUrls : undefined,
-        distance: form.distance ? parseFloat(form.distance) : undefined,
-        price: parseFloat(form.price),
-        pickupDate: form.pickupDate
-          ? new Date(form.pickupDate).toISOString()
-          : undefined,
-        pickupTime: form.pickupTime || undefined,
-        deliveryDate: form.deliveryDate
-          ? new Date(form.deliveryDate).toISOString()
-          : undefined,
-        deliveryTime: form.deliveryTime || undefined,
-        latestDeliveryTime: form.latestDeliveryTime || undefined,
-        paymentIntentId,
-      };
-
-      const res = await fetch("/api/deliveries", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(body),
-      });
-
-      if (!res.ok) {
-        const data = await res.json().catch(() => ({}));
-        throw new Error(data.error || "Failed to create delivery");
-      }
-
-      const delivery = await res.json();
-      router.push(`/deliveries/${delivery.id}`);
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Something went wrong");
-      setSubmitting(false);
-    }
-  }
-
-  const price = parseFloat(form.price);
-
-  return (
-    <div className="min-h-screen bg-gray-50">
-      <div className="mx-auto max-w-lg px-4 py-8 sm:px-6">
-        <button
-          type="button"
-          onClick={onBack}
-          className="text-sm font-medium text-orange-600 hover:text-orange-500"
-        >
-          &larr; Back to delivery details
-        </button>
-        <h1 className="mt-4 text-2xl font-bold text-gray-900">
-          Review & Pay
-        </h1>
-
-        {error && (
-          <div className="mt-4 rounded-lg bg-red-50 px-4 py-3 text-sm font-medium text-red-700">
-            {error}
-          </div>
-        )}
-
-        {/* Order Summary */}
-        <div className="mt-6 rounded-xl bg-white p-6 shadow-sm">
-          <h2 className="text-sm font-semibold uppercase tracking-wider text-gray-400">
-            Order Summary
-          </h2>
-          <div className="mt-4 space-y-2">
-            <div className="flex justify-between text-sm">
-              <span className="text-gray-600">{form.title}</span>
-              <span className="font-medium text-gray-900">
-                ${price.toFixed(2)}
-              </span>
-            </div>
-            <div className="flex justify-between text-sm">
-              <span className="text-gray-600">
-                {form.pickupCity}, {form.pickupState} &rarr;{" "}
-                {form.dropoffCity}, {form.dropoffState}
-              </span>
-            </div>
-            <div className="flex justify-between text-sm">
-              <span className="text-gray-600">
-                {form.packageSize} &middot; {form.packageCount} item(s)
-                {form.packageWeight && ` &middot; ${form.packageWeight} lbs`}
-              </span>
-            </div>
-            {imagePreviews.length > 0 && (
-              <div className="flex gap-2 pt-2">
-                {imagePreviews.map((src, i) => (
-                  <img
-                    key={i}
-                    src={src}
-                    alt={`Item ${i + 1}`}
-                    className="h-12 w-12 rounded object-cover border"
-                  />
-                ))}
-              </div>
-            )}
-          </div>
-          <div className="mt-4 border-t pt-4 flex justify-between">
-            <span className="text-base font-semibold text-gray-900">Total</span>
-            <span className="text-xl font-bold text-orange-600">
-              ${price.toFixed(2)}
-            </span>
-          </div>
-        </div>
-
-        {/* Payment */}
-        <form onSubmit={handlePayAndPost} className="mt-6">
-          <div className="rounded-xl bg-white p-6 shadow-sm">
-            <h2 className="text-sm font-semibold uppercase tracking-wider text-gray-400 mb-4">
-              Payment Details
-            </h2>
-            <PaymentElement
-              options={{
-                layout: "tabs",
-              }}
-            />
-          </div>
-
-          <div className="mt-4 rounded-lg bg-gray-100 px-4 py-3">
-            <p className="text-xs text-gray-500 leading-relaxed">
-              Your card will be charged <strong>${price.toFixed(2)}</strong> now.
-              Funds are held securely until the delivery is completed — your
-              driver receives 100% minus credit card processing fees. If you
-              cancel before a driver accepts, you&apos;ll receive a full refund.
-            </p>
-          </div>
-
-          <button
-            type="submit"
-            disabled={submitting || !stripe || !elements}
-            className="mt-4 w-full rounded-lg bg-orange-600 px-8 py-3 text-sm font-semibold text-white shadow transition hover:bg-orange-500 disabled:opacity-50"
-          >
-            {submitting ? "Processing..." : `Pay $${price.toFixed(2)} & Post Delivery`}
-          </button>
-        </form>
-      </div>
-    </div>
-  );
-}
-
-// ─── Main page component ────────────────────────────────────
 export default function NewDeliveryPage() {
   const router = useRouter();
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState("");
-
-  // Payment step state
-  const [step, setStep] = useState<"form" | "payment">("form");
-  const [clientSecret, setClientSecret] = useState("");
-  const [paymentIntentId, setPaymentIntentId] = useState("");
 
   const [form, setForm] = useState({
     title: "",
@@ -308,7 +40,7 @@ export default function NewDeliveryPage() {
     dropoffPhone: "",
     dropoffNotes: "",
     distance: "",
-    price: "",
+    deliverySpeed: "STANDARD" as DeliverySpeed,
     pickupDate: "",
     pickupTime: "",
     deliveryDate: "",
@@ -319,12 +51,13 @@ export default function NewDeliveryPage() {
   const [imageFiles, setImageFiles] = useState<File[]>([]);
   const [imagePreviews, setImagePreviews] = useState<string[]>([]);
 
-  const estimated = estimatePrice(
-    form.packageSize,
-    parseFloat(form.packageWeight) || 0,
-    parseInt(form.packageCount) || 1,
-    parseFloat(form.distance) || 0
-  );
+  // Estimated range from available drivers
+  const [estimate, setEstimate] = useState<{
+    driverCount: number;
+    estimatedMin: number | null;
+    estimatedMax: number | null;
+  } | null>(null);
+  const [estimating, setEstimating] = useState(false);
 
   useEffect(() => {
     async function checkAuth() {
@@ -344,6 +77,35 @@ export default function NewDeliveryPage() {
   const updateForm = useCallback((field: string, value: string) => {
     setForm((prev) => ({ ...prev, [field]: value }));
   }, []);
+
+  // Fetch estimate whenever relevant fields change
+  useEffect(() => {
+    const timer = setTimeout(async () => {
+      setEstimating(true);
+      try {
+        const res = await fetch("/api/deliveries/estimate", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            packageSize: form.packageSize,
+            packageWeight: form.packageWeight ? parseFloat(form.packageWeight) : null,
+            packageCount: parseInt(form.packageCount) || 1,
+            distance: form.distance ? parseFloat(form.distance) : null,
+            deliverySpeed: form.deliverySpeed,
+          }),
+        });
+        if (res.ok) {
+          setEstimate(await res.json());
+        }
+      } catch {
+        // silent — estimate is optional
+      } finally {
+        setEstimating(false);
+      }
+    }, 500); // debounce
+
+    return () => clearTimeout(timer);
+  }, [form.packageSize, form.packageWeight, form.packageCount, form.distance, form.deliverySpeed]);
 
   function handleImageSelect(e: React.ChangeEvent<HTMLInputElement>) {
     const files = Array.from(e.target.files || []);
@@ -369,45 +131,84 @@ export default function NewDeliveryPage() {
     setImagePreviews((prev) => prev.filter((_, i) => i !== index));
   }
 
-  function applyEstimate() {
-    updateForm("price", estimated.toFixed(2));
-  }
-
-  // Proceed to payment step — creates a PaymentIntent
-  async function handleProceedToPayment(e: React.FormEvent) {
+  async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     setSubmitting(true);
     setError("");
 
-    const price = parseFloat(form.price);
-    if (!price || price <= 0) {
-      setError("Please enter a valid price");
-      setSubmitting(false);
-      return;
-    }
-
     try {
-      const res = await fetch("/api/payments/create-intent", {
+      // 1. Upload images if any
+      let imageUrls: string[] = [];
+      if (imageFiles.length > 0) {
+        const formData = new FormData();
+        imageFiles.forEach((file) => formData.append("files", file));
+
+        const uploadRes = await fetch("/api/upload", {
+          method: "POST",
+          body: formData,
+        });
+
+        if (!uploadRes.ok) {
+          const data = await uploadRes.json().catch(() => ({}));
+          throw new Error(data.error || "Failed to upload images");
+        }
+
+        const uploadData = await uploadRes.json();
+        imageUrls = uploadData.urls;
+      }
+
+      // 2. Create delivery (no price — drivers will quote)
+      const body = {
+        title: form.title,
+        description: form.description || undefined,
+        packageSize: form.packageSize,
+        packageWeight: form.packageWeight
+          ? parseFloat(form.packageWeight)
+          : undefined,
+        packageCount: parseInt(form.packageCount) || 1,
+        pickupAddress: form.pickupAddress,
+        pickupCity: form.pickupCity,
+        pickupState: form.pickupState,
+        pickupZip: form.pickupZip,
+        pickupContact: form.pickupContact || undefined,
+        pickupPhone: form.pickupPhone || undefined,
+        pickupNotes: form.pickupNotes || undefined,
+        dropoffAddress: form.dropoffAddress,
+        dropoffCity: form.dropoffCity,
+        dropoffState: form.dropoffState,
+        dropoffZip: form.dropoffZip,
+        dropoffContact: form.dropoffContact || undefined,
+        dropoffPhone: form.dropoffPhone || undefined,
+        dropoffNotes: form.dropoffNotes || undefined,
+        images: imageUrls.length > 0 ? imageUrls : undefined,
+        distance: form.distance ? parseFloat(form.distance) : undefined,
+        deliverySpeed: form.deliverySpeed,
+        pickupDate: form.pickupDate
+          ? new Date(form.pickupDate).toISOString()
+          : undefined,
+        pickupTime: form.pickupTime || undefined,
+        deliveryDate: form.deliveryDate
+          ? new Date(form.deliveryDate).toISOString()
+          : undefined,
+        deliveryTime: form.deliveryTime || undefined,
+        latestDeliveryTime: form.latestDeliveryTime || undefined,
+      };
+
+      const res = await fetch("/api/deliveries", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          amount: price,
-          deliveryTitle: form.title,
-        }),
+        body: JSON.stringify(body),
       });
 
       if (!res.ok) {
         const data = await res.json().catch(() => ({}));
-        throw new Error(data.error || "Failed to initialize payment");
+        throw new Error(data.error || "Failed to create delivery");
       }
 
-      const data = await res.json();
-      setClientSecret(data.clientSecret);
-      setPaymentIntentId(data.paymentIntentId);
-      setStep("payment");
+      const delivery = await res.json();
+      router.push(`/deliveries/${delivery.id}`);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Something went wrong");
-    } finally {
       setSubmitting(false);
     }
   }
@@ -420,35 +221,6 @@ export default function NewDeliveryPage() {
     );
   }
 
-  // ─── Payment step ──────────────────────────────────────────
-  if (step === "payment" && clientSecret) {
-    return (
-      <Elements
-        stripe={stripePromise}
-        options={{
-          clientSecret,
-          appearance: {
-            theme: "stripe",
-            variables: {
-              colorPrimary: "#ea580c",
-              borderRadius: "8px",
-            },
-          },
-        }}
-      >
-        <CheckoutForm
-          clientSecret={clientSecret}
-          paymentIntentId={paymentIntentId}
-          form={form}
-          imageFiles={imageFiles}
-          imagePreviews={imagePreviews}
-          onBack={() => setStep("form")}
-        />
-      </Elements>
-    );
-  }
-
-  // ─── Form step ─────────────────────────────────────────────
   const inputClass =
     "mt-1 block w-full rounded-lg border border-gray-300 px-3 py-2 text-sm shadow-sm focus:border-orange-500 focus:outline-none focus:ring-1 focus:ring-orange-500";
   const labelClass = "block text-sm font-medium text-gray-700";
@@ -458,7 +230,8 @@ export default function NewDeliveryPage() {
       <div className="mx-auto max-w-3xl px-4 py-8 sm:px-6 lg:px-8">
         <h1 className="text-2xl font-bold text-gray-900">Post a Delivery</h1>
         <p className="mt-1 text-sm text-gray-500">
-          Fill in the details below, then pay to post your delivery.
+          Describe what you need delivered. Drivers will send you quotes based on
+          their rates — you pick the one you like.
         </p>
 
         {error && (
@@ -467,7 +240,7 @@ export default function NewDeliveryPage() {
           </div>
         )}
 
-        <form onSubmit={handleProceedToPayment} className="mt-6 space-y-6">
+        <form onSubmit={handleSubmit} className="mt-6 space-y-6">
           {/* Basic Info */}
           <div className="rounded-xl bg-white p-6 shadow-sm">
             <h2 className="text-lg font-semibold text-gray-900">
@@ -536,6 +309,38 @@ export default function NewDeliveryPage() {
                   min="1"
                 />
               </div>
+            </div>
+          </div>
+
+          {/* Delivery Speed */}
+          <div className="rounded-xl bg-white p-6 shadow-sm">
+            <h2 className="text-lg font-semibold text-gray-900">
+              Delivery Speed
+            </h2>
+            <div className="mt-4 grid gap-3 sm:grid-cols-3">
+              {speedOptions.map((opt) => (
+                <button
+                  key={opt.value}
+                  type="button"
+                  onClick={() => updateForm("deliverySpeed", opt.value)}
+                  className={`rounded-lg border-2 px-4 py-3 text-left transition ${
+                    form.deliverySpeed === opt.value
+                      ? "border-orange-500 bg-orange-50"
+                      : "border-gray-200 hover:border-gray-300"
+                  }`}
+                >
+                  <p
+                    className={`text-sm font-semibold ${
+                      form.deliverySpeed === opt.value
+                        ? "text-orange-700"
+                        : "text-gray-900"
+                    }`}
+                  >
+                    {opt.label}
+                  </p>
+                  <p className="text-xs text-gray-500 mt-0.5">{opt.desc}</p>
+                </button>
+              ))}
             </div>
           </div>
 
@@ -756,6 +561,26 @@ export default function NewDeliveryPage() {
             </div>
           </div>
 
+          {/* Distance */}
+          <div className="rounded-xl bg-white p-6 shadow-sm">
+            <h2 className="text-lg font-semibold text-gray-900">Distance</h2>
+            <div className="mt-4">
+              <label className={labelClass}>Estimated Distance (miles)</label>
+              <input
+                type="number"
+                value={form.distance}
+                onChange={(e) => updateForm("distance", e.target.value)}
+                className={inputClass}
+                placeholder="e.g. 25"
+                min="0"
+                step="0.1"
+              />
+              <p className="mt-1 text-xs text-gray-400">
+                Approximate driving distance between pickup and dropoff
+              </p>
+            </div>
+          </div>
+
           {/* Schedule */}
           <div className="rounded-xl bg-white p-6 shadow-sm">
             <h2 className="text-lg font-semibold text-gray-900">Schedule</h2>
@@ -813,84 +638,56 @@ export default function NewDeliveryPage() {
             </div>
           </div>
 
-          {/* Pricing */}
+          {/* Estimated Price Range */}
           <div className="rounded-xl bg-white p-6 shadow-sm">
-            <h2 className="text-lg font-semibold text-gray-900">Budget</h2>
-
+            <h2 className="text-lg font-semibold text-gray-900">
+              Estimated Cost
+            </h2>
+            <p className="mt-1 text-sm text-gray-500">
+              Based on available drivers&apos; rate cards in the area
+            </p>
             <div className="mt-4">
-              <label className={labelClass}>Estimated Distance (miles)</label>
-              <input
-                type="number"
-                value={form.distance}
-                onChange={(e) => updateForm("distance", e.target.value)}
-                className={inputClass}
-                placeholder="e.g. 25"
-                min="0"
-                step="0.1"
-              />
-              <p className="mt-1 text-xs text-gray-400">
-                Approximate driving distance between pickup and dropoff
-              </p>
-            </div>
-
-            {/* Price Estimate */}
-            <div className="mt-4 rounded-lg bg-orange-50 border border-orange-200 p-4">
-              <div className="flex items-center justify-between">
-                <div>
-                  <p className="text-sm font-medium text-orange-800">
-                    Estimated Price
-                  </p>
-                  <p className="text-xs text-orange-600 mt-0.5">
-                    Based on size
-                    {form.distance ? ", distance" : ""}
-                    {form.packageWeight ? ", weight" : ""}
-                    {parseInt(form.packageCount) > 1 ? ", and item count" : ""}
+              {estimating ? (
+                <p className="text-sm text-gray-400">Calculating...</p>
+              ) : estimate && estimate.driverCount > 0 && estimate.estimatedMin != null && estimate.estimatedMax != null ? (
+                <div className="rounded-lg bg-green-50 border border-green-200 p-4">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <p className="text-sm font-medium text-green-800">
+                        Estimated cost: ${estimate.estimatedMin.toFixed(2)}
+                        {estimate.estimatedMin !== estimate.estimatedMax &&
+                          ` \u2013 $${estimate.estimatedMax.toFixed(2)}`}
+                      </p>
+                      <p className="text-xs text-green-600 mt-0.5">
+                        Based on {estimate.driverCount} available driver
+                        {estimate.driverCount !== 1 ? "s" : ""}
+                      </p>
+                    </div>
+                  </div>
+                </div>
+              ) : (
+                <div className="rounded-lg bg-amber-50 border border-amber-200 p-4">
+                  <p className="text-sm text-amber-800">
+                    No drivers with rate cards available yet. Post your delivery
+                    and drivers can still submit custom quotes.
                   </p>
                 </div>
-                <div className="text-right">
-                  <p className="text-2xl font-bold text-orange-700">
-                    ${estimated.toFixed(2)}
-                  </p>
-                  <button
-                    type="button"
-                    onClick={applyEstimate}
-                    className="mt-1 text-xs font-medium text-orange-600 hover:text-orange-800 underline transition"
-                  >
-                    Use this price
-                  </button>
-                </div>
-              </div>
-            </div>
-
-            <div className="mt-4">
-              <label className={labelClass}>Your Budget ($)</label>
-              <input
-                type="number"
-                value={form.price}
-                onChange={(e) => updateForm("price", e.target.value)}
-                className={inputClass}
-                placeholder="e.g. 150.00"
-                min="1"
-                step="0.01"
-                required
-              />
-              {form.price && parseFloat(form.price) < estimated * 0.6 && (
-                <p className="mt-1.5 text-xs text-amber-600">
-                  This is significantly below the estimated price. Drivers may
-                  be less likely to accept this delivery.
-                </p>
               )}
+              <p className="mt-3 text-xs text-gray-400">
+                You won&apos;t be charged until you accept a driver&apos;s quote.
+                Drivers compete for your job so you get fair pricing.
+              </p>
             </div>
           </div>
 
-          {/* Submit → goes to payment */}
+          {/* Submit */}
           <div className="flex justify-end">
             <button
               type="submit"
               disabled={submitting}
               className="rounded-lg bg-orange-600 px-8 py-3 text-sm font-semibold text-white shadow transition hover:bg-orange-500 disabled:opacity-50"
             >
-              {submitting ? "Preparing payment..." : "Continue to Payment"}
+              {submitting ? "Posting..." : "Post Delivery"}
             </button>
           </div>
         </form>

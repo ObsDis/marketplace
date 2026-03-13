@@ -1,10 +1,18 @@
-import { redirect, notFound } from "next/navigation";
+import { notFound } from "next/navigation";
 import Link from "next/link";
 import { getSession } from "@/lib/auth";
 import { db } from "@/lib/db";
+import { calculateQuote } from "@/lib/quote-engine";
 import DeliveryActions from "./DeliveryActions";
+import QuotePanel from "./QuotePanel";
 
 export const dynamic = "force-dynamic";
+
+const speedLabels: Record<string, string> = {
+  STANDARD: "Standard",
+  SAME_DAY: "Same Day",
+  RUSH: "Rush",
+};
 
 function formatDate(date: Date) {
   return new Intl.DateTimeFormat("en-US", {
@@ -75,15 +83,32 @@ export default async function DeliveryDetailPage({
   const currentStep = getTimelineIndex(delivery.status);
   const isCancelled = delivery.status === "CANCELLED";
 
-  // Determine what actions the current user can take
+  // Determine user roles
   const isDriver = session?.user.role === "DRIVER";
   const isCustomer = session?.user.id === delivery.customerId;
   const isAssignedDriver =
     session?.user.driver && delivery.driverId === session.user.driver.id;
 
-  const canAccept = isDriver && delivery.status === "POSTED" && !isAssignedDriver;
   const canUpdateStatus = isAssignedDriver && !isCancelled && delivery.status !== "DELIVERED";
   const canCancel = isCustomer && delivery.status === "POSTED";
+
+  // Calculate auto-quote for current driver (if they have a rate card)
+  let driverAutoQuote: number | null = null;
+  if (isDriver && session?.user.driver) {
+    const driverWithCard = await db.driver.findUnique({
+      where: { userId: session.user.id },
+      include: { rateCard: true },
+    });
+    if (driverWithCard?.rateCard) {
+      driverAutoQuote = calculateQuote(driverWithCard.rateCard, {
+        distance: delivery.distance,
+        packageSize: delivery.packageSize,
+        packageWeight: delivery.packageWeight,
+        packageCount: delivery.packageCount,
+        deliverySpeed: delivery.deliverySpeed,
+      });
+    }
+  }
 
   return (
     <div className="min-h-screen bg-gray-50">
@@ -101,11 +126,18 @@ export default async function DeliveryDetailPage({
               {delivery.title}
             </h1>
           </div>
-          <span
-            className={`inline-flex rounded-full border px-4 py-1.5 text-sm font-semibold ${statusColors[delivery.status]}`}
-          >
-            {delivery.status.replace("_", " ")}
-          </span>
+          <div className="flex items-center gap-2">
+            {delivery.deliverySpeed !== "STANDARD" && (
+              <span className="inline-flex rounded-full border border-amber-200 bg-amber-100 px-3 py-1 text-xs font-semibold text-amber-800">
+                {speedLabels[delivery.deliverySpeed]}
+              </span>
+            )}
+            <span
+              className={`inline-flex rounded-full border px-4 py-1.5 text-sm font-semibold ${statusColors[delivery.status]}`}
+            >
+              {delivery.status.replace("_", " ")}
+            </span>
+          </div>
         </div>
 
         {delivery.description && (
@@ -220,7 +252,7 @@ export default async function DeliveryDetailPage({
           </div>
         </div>
 
-        {/* Package & Price */}
+        {/* Package, Price/Estimate, & Schedule */}
         <div className="mt-4 grid gap-4 sm:grid-cols-3">
           <div className="rounded-xl bg-white p-6 shadow-sm">
             <h3 className="text-sm font-semibold uppercase tracking-wider text-gray-400">
@@ -240,15 +272,38 @@ export default async function DeliveryDetailPage({
               <span className="font-medium">Count:</span>{" "}
               {delivery.packageCount}
             </p>
+            {delivery.distance && (
+              <p className="text-sm text-gray-900">
+                <span className="font-medium">Distance:</span>{" "}
+                {delivery.distance} mi
+              </p>
+            )}
           </div>
 
           <div className="rounded-xl bg-white p-6 shadow-sm">
             <h3 className="text-sm font-semibold uppercase tracking-wider text-gray-400">
-              Price
+              {delivery.price ? "Agreed Price" : "Estimated Range"}
             </h3>
-            <p className="mt-2 text-2xl font-bold text-gray-900">
-              {formatCurrency(delivery.price)}
-            </p>
+            {delivery.price ? (
+              <p className="mt-2 text-2xl font-bold text-gray-900">
+                {formatCurrency(delivery.price)}
+              </p>
+            ) : delivery.estimatedMin != null && delivery.estimatedMax != null ? (
+              <div className="mt-2">
+                <p className="text-2xl font-bold text-gray-900">
+                  {formatCurrency(delivery.estimatedMin)}
+                  {delivery.estimatedMin !== delivery.estimatedMax &&
+                    ` – ${formatCurrency(delivery.estimatedMax)}`}
+                </p>
+                <p className="text-xs text-gray-500 mt-1">
+                  Based on driver rate cards
+                </p>
+              </div>
+            ) : (
+              <p className="mt-2 text-sm text-gray-400">
+                Waiting for driver quotes
+              </p>
+            )}
           </div>
 
           <div className="rounded-xl bg-white p-6 shadow-sm">
@@ -304,7 +359,7 @@ export default async function DeliveryDetailPage({
           </div>
         )}
 
-        {/* Driver Info */}
+        {/* Driver Info (after quote accepted) */}
         {delivery.driver && (
           <div className="mt-4 rounded-xl bg-white p-6 shadow-sm">
             <h3 className="text-sm font-semibold uppercase tracking-wider text-gray-400">
@@ -351,12 +406,23 @@ export default async function DeliveryDetailPage({
           </div>
         )}
 
-        {/* Actions */}
-        {session && (canAccept || canUpdateStatus || canCancel) && (
+        {/* Quote Panel — drivers submit quotes, shippers review/accept/counter */}
+        {session && (isDriver || isCustomer) && (
+          <QuotePanel
+            deliveryId={delivery.id}
+            isShipper={!!isCustomer}
+            isDriver={!!isDriver}
+            driverAutoQuote={driverAutoQuote}
+            deliveryStatus={delivery.status}
+          />
+        )}
+
+        {/* Status update actions (for assigned driver) */}
+        {session && (canUpdateStatus || canCancel) && (
           <DeliveryActions
             deliveryId={delivery.id}
             status={delivery.status}
-            canAccept={canAccept}
+            canAccept={false}
             canUpdateStatus={!!canUpdateStatus}
             canCancel={canCancel}
           />

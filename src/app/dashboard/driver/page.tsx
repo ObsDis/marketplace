@@ -59,6 +59,7 @@ const subStatusVariant: Record<string, "default" | "secondary" | "outline" | "de
 const sidebarLinks = [
   { href: "/dashboard/driver", label: "Overview", icon: "📊" },
   { href: "/dashboard/driver/deliveries", label: "My Deliveries", icon: "📦" },
+  { href: "/dashboard/driver/rate-card", label: "Rate Card", icon: "💲" },
   { href: "/marketplace", label: "Available Jobs", icon: "🔍" },
   { href: "/dashboard/driver/settings", label: "Settings", icon: "⚙️" },
   { href: "/dashboard/driver/subscription", label: "Subscription", icon: "💳" },
@@ -74,6 +75,7 @@ export default async function DriverDashboardPage() {
     include: {
       deliveries: { orderBy: { createdAt: "desc" }, take: 10 },
       reviews: true,
+      rateCard: true,
     },
   });
 
@@ -137,7 +139,7 @@ export default async function DriverDashboardPage() {
                   Subscribe to Start Accepting Deliveries
                 </CardTitle>
                 <CardDescription>
-                  Get unlimited access to delivery jobs for just $99.99/month. No
+                  Get unlimited access to delivery jobs for just $99/month. No
                   commissions, no hidden fees.
                 </CardDescription>
               </CardHeader>
@@ -146,7 +148,30 @@ export default async function DriverDashboardPage() {
                   href="/dashboard/driver/subscription"
                   className={cn(buttonVariants({ variant: "default", size: "lg" }))}
                 >
-                  Subscribe for $99.99/mo
+                  Subscribe for $99/mo
+                </Link>
+              </CardFooter>
+            </Card>
+          )}
+
+          {/* Rate Card Banner */}
+          {!driver.rateCard && driver.subscriptionStatus === "ACTIVE" && (
+            <Card className="border-2 border-amber-300 bg-amber-50">
+              <CardHeader>
+                <CardTitle className="text-lg font-bold text-amber-800">
+                  Set Up Your Rate Card
+                </CardTitle>
+                <CardDescription className="text-amber-700">
+                  You need a rate card so shippers can see your pricing.
+                  Takes about 2 minutes.
+                </CardDescription>
+              </CardHeader>
+              <CardFooter>
+                <Link
+                  href="/dashboard/driver/rate-card"
+                  className={cn(buttonVariants({ variant: "default", size: "lg" }))}
+                >
+                  Set Up Pricing
                 </Link>
               </CardFooter>
             </Card>
@@ -287,7 +312,7 @@ export default async function DriverDashboardPage() {
                           </Badge>
                         </TableCell>
                         <TableCell className="text-right font-semibold">
-                          {formatCurrency(delivery.price)}
+                          {formatCurrency(delivery.price ?? 0)}
                         </TableCell>
                         <TableCell className="text-muted-foreground">
                           {formatDate(delivery.createdAt)}

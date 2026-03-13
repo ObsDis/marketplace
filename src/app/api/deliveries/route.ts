@@ -3,7 +3,8 @@ import { z } from "zod";
 import { db } from "@/lib/db";
 import { getSession } from "@/lib/auth";
 import { sendDeliveryPosted } from "@/lib/email";
-import { PackageSize, DeliveryStatus } from "@/generated/prisma";
+import { PackageSize, DeliveryStatus, DeliverySpeed } from "@/generated/prisma";
+import { calculateQuote } from "@/lib/quote-engine";
 
 const createDeliverySchema = z.object({
   title: z.string().min(1, "Title is required"),
@@ -27,13 +28,12 @@ const createDeliverySchema = z.object({
   dropoffNotes: z.string().optional(),
   images: z.array(z.string().url()).optional(),
   distance: z.number().positive().optional(),
-  price: z.number().positive("Price must be positive"),
+  deliverySpeed: z.nativeEnum(DeliverySpeed).default(DeliverySpeed.STANDARD),
   pickupDate: z.string().optional(),
   pickupTime: z.string().optional(),
   deliveryDate: z.string().optional(),
   deliveryTime: z.string().optional(),
   latestDeliveryTime: z.string().optional(),
-  paymentIntentId: z.string().optional(),
 });
 
 export async function GET(request: NextRequest) {
@@ -64,6 +64,9 @@ export async function GET(request: NextRequest) {
         driver: {
           select: { id: true, displayName: true, rating: true },
         },
+        _count: {
+          select: { quotes: true },
+        },
       },
       orderBy: { createdAt: "desc" },
     });
@@ -87,6 +90,31 @@ export async function POST(request: Request) {
 
     const body = await request.json();
     const parsed = createDeliverySchema.parse(body);
+
+    // Calculate estimated price range from available drivers
+    const drivers = await db.driver.findMany({
+      where: {
+        available: true,
+        subscriptionStatus: "ACTIVE",
+        rateCard: { isNot: null },
+      },
+      include: { rateCard: true },
+    });
+
+    const deliveryParams = {
+      distance: parsed.distance ?? null,
+      packageSize: parsed.packageSize,
+      packageWeight: parsed.packageWeight ?? null,
+      packageCount: parsed.packageCount,
+      deliverySpeed: parsed.deliverySpeed,
+    };
+
+    const autoQuotes = drivers
+      .filter((d): d is typeof d & { rateCard: NonNullable<typeof d.rateCard> } => !!d.rateCard)
+      .map((d) => calculateQuote(d.rateCard, deliveryParams));
+
+    const estimatedMin = autoQuotes.length > 0 ? Math.min(...autoQuotes) : null;
+    const estimatedMax = autoQuotes.length > 0 ? Math.max(...autoQuotes) : null;
 
     const delivery = await db.delivery.create({
       data: {
@@ -112,14 +140,14 @@ export async function POST(request: Request) {
         dropoffNotes: parsed.dropoffNotes,
         images: parsed.images ?? [],
         distance: parsed.distance,
-        price: parsed.price,
+        deliverySpeed: parsed.deliverySpeed,
+        estimatedMin,
+        estimatedMax,
         pickupDate: parsed.pickupDate ? new Date(parsed.pickupDate) : undefined,
         pickupTime: parsed.pickupTime,
         deliveryDate: parsed.deliveryDate ? new Date(parsed.deliveryDate) : undefined,
         deliveryTime: parsed.deliveryTime,
         latestDeliveryTime: parsed.latestDeliveryTime,
-        paymentIntentId: parsed.paymentIntentId,
-        paymentStatus: parsed.paymentIntentId ? "PAID" : "UNPAID",
       },
     });
 

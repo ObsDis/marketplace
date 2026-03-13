@@ -11,7 +11,7 @@ import {
 import { DeliveryStatus, SubStatus } from "@/generated/prisma";
 
 // Stripe's standard CC processing fee — passed through, not profit.
-// Revenue comes from driver $99.99/month subscriptions.
+// Revenue comes from driver $99/month subscriptions.
 const STRIPE_FEE_PERCENT = 0.029;
 const STRIPE_FEE_FIXED_CENTS = 30;
 
@@ -208,7 +208,7 @@ export async function PATCH(
           delivery.paymentStatus === "PAID" &&
           driver.stripeAccountId
         ) {
-          const amountCents = Math.round(delivery.price * 100);
+          const amountCents = Math.round((delivery.price ?? 0) * 100);
           // Deduct only the Stripe CC processing fee (2.9% + $0.30)
           const stripeFee = Math.round(amountCents * STRIPE_FEE_PERCENT) + STRIPE_FEE_FIXED_CENTS;
           const transferAmount = amountCents - stripeFee;
@@ -261,7 +261,7 @@ export async function PATCH(
           statusCustomer.email,
           driverUser?.email ?? "",
           delivery.title,
-          delivery.price
+          delivery.price ?? 0
         );
       }
 

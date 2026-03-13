@@ -50,7 +50,7 @@ export default function TermsPage() {
               4. Driver Subscriptions
             </h2>
             <p className="mt-2">
-              Drivers must maintain an active subscription ($99.99/month) to
+              Drivers must maintain an active subscription ($99/month) to
               accept deliveries. Subscriptions renew automatically and can be
               cancelled at any time. Cancellation takes effect at the end of
               the current billing period. No refunds are provided for partial

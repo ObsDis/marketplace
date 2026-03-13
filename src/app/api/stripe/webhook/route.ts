@@ -34,16 +34,54 @@ export async function POST(request: Request) {
     switch (event.type) {
       case "checkout.session.completed": {
         const session = event.data.object as Stripe.Checkout.Session;
-        const driverId = session.metadata?.driverId;
 
-        if (driverId && session.subscription) {
+        // Handle driver subscription checkout
+        if (session.metadata?.driverId && session.subscription) {
           await db.driver.update({
-            where: { id: driverId },
+            where: { id: session.metadata.driverId },
             data: {
               subscriptionId: session.subscription as string,
               subscriptionStatus: "ACTIVE",
             },
           });
+        }
+
+        // Handle delivery payment checkout (quote accepted)
+        if (session.metadata?.quoteId && session.metadata?.deliveryId) {
+          const quoteId = session.metadata.quoteId;
+          const deliveryId = session.metadata.deliveryId;
+          const driverId = session.metadata.driverId;
+          const finalPrice = parseFloat(session.metadata.finalPrice || "0");
+          const paymentIntentId =
+            typeof session.payment_intent === "string"
+              ? session.payment_intent
+              : session.payment_intent?.id;
+
+          // Accept quote, decline others, assign driver, set price
+          await db.$transaction([
+            db.quote.update({
+              where: { id: quoteId },
+              data: { status: "ACCEPTED" },
+            }),
+            db.quote.updateMany({
+              where: {
+                deliveryId,
+                id: { not: quoteId },
+                status: { not: "WITHDRAWN" },
+              },
+              data: { status: "DECLINED" },
+            }),
+            db.delivery.update({
+              where: { id: deliveryId },
+              data: {
+                status: "ACCEPTED",
+                driverId: driverId || undefined,
+                price: finalPrice,
+                paymentIntentId: paymentIntentId || undefined,
+                paymentStatus: "PAID",
+              },
+            }),
+          ]);
         }
         break;
       }

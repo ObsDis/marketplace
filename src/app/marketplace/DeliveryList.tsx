@@ -2,7 +2,7 @@
 
 import { useMemo, useState } from "react";
 import Link from "next/link";
-import { MapPin, Package, Clock, Search, Plus } from "lucide-react";
+import { MapPin, Package, Clock, Search, Plus, Zap, MessageSquare } from "lucide-react";
 
 import {
   Card,
@@ -31,7 +31,12 @@ type Delivery = {
   pickupState: string;
   dropoffCity: string;
   dropoffState: string;
-  price: number;
+  price: number | null;
+  estimatedMin: number | null;
+  estimatedMax: number | null;
+  deliverySpeed: string;
+  distance: number | null;
+  quoteCount: number;
   pickupDate: string | Date | null;
   createdAt: string | Date;
 };
@@ -67,6 +72,12 @@ const sizeBadgeVariant: Record<string, BadgeVariant> = {
   PALLET: "secondary",
 };
 
+const speedLabels: Record<string, string> = {
+  STANDARD: "Standard",
+  SAME_DAY: "Same Day",
+  RUSH: "Rush",
+};
+
 const SIZE_OPTIONS = [
   { value: "ALL", label: "All Sizes" },
   { value: "SMALL", label: "Small" },
@@ -77,12 +88,19 @@ const SIZE_OPTIONS = [
   { value: "PALLET", label: "Pallets" },
 ];
 
-type SortOption = "newest" | "price-asc" | "price-desc";
+const SPEED_OPTIONS = [
+  { value: "ALL", label: "All Speeds" },
+  { value: "STANDARD", label: "Standard" },
+  { value: "SAME_DAY", label: "Same Day" },
+  { value: "RUSH", label: "Rush" },
+];
+
+type SortOption = "newest" | "estimate-asc" | "estimate-desc";
 
 const SORT_OPTIONS: { value: SortOption; label: string }[] = [
   { value: "newest", label: "Newest First" },
-  { value: "price-asc", label: "Price: Low to High" },
-  { value: "price-desc", label: "Price: High to Low" },
+  { value: "estimate-asc", label: "Estimate: Low to High" },
+  { value: "estimate-desc", label: "Estimate: High to Low" },
 ];
 
 export default function DeliveryList({
@@ -92,12 +110,12 @@ export default function DeliveryList({
 }) {
   const [searchQuery, setSearchQuery] = useState("");
   const [sizeFilter, setSizeFilter] = useState("ALL");
+  const [speedFilter, setSpeedFilter] = useState("ALL");
   const [sortOption, setSortOption] = useState<SortOption>("newest");
 
   const filtered = useMemo(() => {
     let results = deliveries;
 
-    // Text search: title, pickup city, dropoff city
     if (searchQuery.trim()) {
       const q = searchQuery.trim().toLowerCase();
       results = results.filter(
@@ -108,23 +126,28 @@ export default function DeliveryList({
       );
     }
 
-    // Package size filter
     if (sizeFilter && sizeFilter !== "ALL") {
       results = results.filter((d) => d.packageSize === sizeFilter);
     }
 
-    // Sort
+    if (speedFilter && speedFilter !== "ALL") {
+      results = results.filter((d) => d.deliverySpeed === speedFilter);
+    }
+
     results = [...results].sort((a, b) => {
-      if (sortOption === "price-asc") return a.price - b.price;
-      if (sortOption === "price-desc") return b.price - a.price;
-      // newest first (default)
+      if (sortOption === "estimate-asc") {
+        return (a.estimatedMin ?? 0) - (b.estimatedMin ?? 0);
+      }
+      if (sortOption === "estimate-desc") {
+        return (b.estimatedMax ?? 0) - (a.estimatedMax ?? 0);
+      }
       return (
         new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
       );
     });
 
     return results;
-  }, [deliveries, searchQuery, sizeFilter, sortOption]);
+  }, [deliveries, searchQuery, sizeFilter, speedFilter, sortOption]);
 
   return (
     <>
@@ -153,6 +176,23 @@ export default function DeliveryList({
                 </SelectTrigger>
                 <SelectContent>
                   {SIZE_OPTIONS.map((opt) => (
+                    <SelectItem key={opt.value} value={opt.value}>
+                      {opt.label}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+
+              <Select
+                value={speedFilter}
+                onValueChange={(val) => setSpeedFilter(val as string)}
+              >
+                <SelectTrigger className="w-[140px]">
+                  <Zap className="size-4 text-muted-foreground" />
+                  <SelectValue placeholder="All Speeds" />
+                </SelectTrigger>
+                <SelectContent>
+                  {SPEED_OPTIONS.map((opt) => (
                     <SelectItem key={opt.value} value={opt.value}>
                       {opt.label}
                     </SelectItem>
@@ -211,6 +251,7 @@ export default function DeliveryList({
               onClick={() => {
                 setSearchQuery("");
                 setSizeFilter("ALL");
+                setSpeedFilter("ALL");
                 setSortOption("newest");
               }}
             >
@@ -234,14 +275,20 @@ export default function DeliveryList({
                       <CardTitle className="line-clamp-1">
                         {delivery.title}
                       </CardTitle>
-                      <Badge
-                        variant={
-                          sizeBadgeVariant[delivery.packageSize] || "secondary"
-                        }
-                        className="shrink-0"
-                      >
-                        {delivery.packageSize.replace("_", " ")}
-                      </Badge>
+                      <div className="flex shrink-0 gap-1.5">
+                        {delivery.deliverySpeed !== "STANDARD" && (
+                          <Badge variant="destructive" className="text-xs">
+                            {speedLabels[delivery.deliverySpeed]}
+                          </Badge>
+                        )}
+                        <Badge
+                          variant={
+                            sizeBadgeVariant[delivery.packageSize] || "secondary"
+                          }
+                        >
+                          {delivery.packageSize.replace("_", " ")}
+                        </Badge>
+                      </div>
                     </div>
                   </CardHeader>
 
@@ -263,19 +310,53 @@ export default function DeliveryList({
                       </div>
                     </div>
 
+                    {delivery.distance && (
+                      <p className="text-xs text-muted-foreground">
+                        ~{delivery.distance} miles
+                      </p>
+                    )}
+
                     <Separator />
 
-                    {/* Price and Date */}
+                    {/* Price / Estimate + Quotes */}
                     <div className="flex items-center justify-between">
-                      <span className="text-lg font-bold text-primary">
-                        {formatPrice(delivery.price)}
-                      </span>
-                      {delivery.pickupDate && (
-                        <span className="flex items-center gap-1 text-xs text-muted-foreground">
-                          <Clock className="size-3.5" />
-                          {new Date(delivery.pickupDate).toLocaleDateString()}
-                        </span>
-                      )}
+                      <div>
+                        {delivery.price ? (
+                          <span className="text-lg font-bold text-primary">
+                            {formatPrice(delivery.price)}
+                          </span>
+                        ) : delivery.estimatedMin != null && delivery.estimatedMax != null ? (
+                          <div>
+                            <span className="text-lg font-bold text-primary">
+                              {formatPrice(delivery.estimatedMin)}
+                              {delivery.estimatedMin !== delivery.estimatedMax &&
+                                ` – ${formatPrice(delivery.estimatedMax)}`}
+                            </span>
+                            <p className="text-xs text-muted-foreground">
+                              est. range
+                            </p>
+                          </div>
+                        ) : (
+                          <span className="text-sm text-muted-foreground">
+                            Awaiting quotes
+                          </span>
+                        )}
+                      </div>
+                      <div className="flex items-center gap-3">
+                        {delivery.quoteCount > 0 && (
+                          <span className="flex items-center gap-1 text-xs text-muted-foreground">
+                            <MessageSquare className="size-3.5" />
+                            {delivery.quoteCount} quote
+                            {delivery.quoteCount !== 1 ? "s" : ""}
+                          </span>
+                        )}
+                        {delivery.pickupDate && (
+                          <span className="flex items-center gap-1 text-xs text-muted-foreground">
+                            <Clock className="size-3.5" />
+                            {new Date(delivery.pickupDate).toLocaleDateString()}
+                          </span>
+                        )}
+                      </div>
                     </div>
                   </CardContent>
 

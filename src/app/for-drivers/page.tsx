@@ -12,7 +12,7 @@ export default function ForDriversPage() {
           </h1>
           <p className="mx-auto mt-4 max-w-2xl text-lg text-gray-600">
             Keep 100% of your earnings. Set your own prices. Work on your
-            schedule. All for a flat $99.99/month.
+            schedule. All for a flat $99/month.
           </p>
           <Link
             href="/auth/signup"
@@ -43,7 +43,7 @@ export default function ForDriversPage() {
               <tbody className="divide-y">
                 {[
                   ["Commission per delivery", "0%", "20–30%"],
-                  ["Monthly cost", "$99.99", "Free*"],
+                  ["Monthly cost", "$99", "Free*"],
                   ["Set your own prices", "Yes", "No"],
                   ["$500 delivery earnings", "You keep $485.20", "You keep ~$375"],
                   ["$2,000/month earnings", "You keep $1,900+", "You keep ~$1,500"],

@@ -151,7 +151,7 @@ export default async function DriverDeliveriesPage({
                     </td>
                     <td className="px-4 py-3">
                       <span className="text-sm font-semibold text-gray-900">
-                        {formatCurrency(delivery.price)}
+                        {formatCurrency(delivery.price ?? 0)}
                       </span>
                     </td>
                     <td className="px-4 py-3">

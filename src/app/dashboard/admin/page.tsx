@@ -45,7 +45,7 @@ export default async function AdminDashboardPage() {
       }),
     ]);
 
-  const mrr = activeSubscriptions * 99.99;
+  const mrr = activeSubscriptions * 99;
   const completionRate =
     totalDeliveries > 0
       ? ((completedDeliveries / totalDeliveries) * 100).toFixed(1)

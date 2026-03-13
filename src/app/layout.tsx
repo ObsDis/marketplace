@@ -18,7 +18,7 @@ const geistMono = Geist_Mono({
 export const metadata: Metadata = {
   title: "Sprint Cargo - The Fair Delivery Platform",
   description:
-    "The fair delivery platform. $99.99/mo for drivers. Zero commission. Post deliveries, claim routes, and keep 100% of your earnings.",
+    "The fair delivery platform. $99/mo for drivers. Zero commission. Post deliveries, claim routes, and keep 100% of your earnings.",
 };
 
 export default function RootLayout({

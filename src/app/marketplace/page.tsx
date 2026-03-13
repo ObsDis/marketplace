@@ -19,8 +19,15 @@ export default async function MarketplacePage() {
       dropoffCity: true,
       dropoffState: true,
       price: true,
+      estimatedMin: true,
+      estimatedMax: true,
+      deliverySpeed: true,
+      distance: true,
       pickupDate: true,
       createdAt: true,
+      _count: {
+        select: { quotes: true },
+      },
     },
   });
 
@@ -29,6 +36,7 @@ export default async function MarketplacePage() {
     ...d,
     pickupDate: d.pickupDate ? d.pickupDate.toISOString() : null,
     createdAt: d.createdAt.toISOString(),
+    quoteCount: d._count.quotes,
   }));
 
   return (

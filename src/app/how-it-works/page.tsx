@@ -30,7 +30,7 @@ const customerSteps = [
 const driverSteps = [
   {
     step: 1,
-    title: "Subscribe for $99.99/mo",
+    title: "Subscribe for $99/mo",
     description:
       "Sign up as a driver and activate your monthly subscription. No contracts — cancel anytime.",
   },

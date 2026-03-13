@@ -41,7 +41,7 @@ export default function Home() {
             </h1>
             <p className="mx-auto mt-6 max-w-3xl text-lg leading-8 text-amber-100 sm:text-xl">
               Delivery platforms take up to 30% of every job. We charge drivers
-              $99.99/month. That&apos;s it. Lower costs for drivers means lower
+              $99/month. That&apos;s it. Lower costs for drivers means lower
               prices for you.
             </p>
             <div className="mt-10 flex flex-col items-center justify-center gap-4 sm:flex-row">
@@ -149,7 +149,7 @@ export default function Home() {
                   </div>
                   <div>
                     <h4 className="font-semibold text-gray-900">
-                      Subscribe for $99.99/mo
+                      Subscribe for $99/mo
                     </h4>
                     <p className="mt-1 text-sm text-gray-600">
                       No commissions, no hidden fees.
@@ -212,7 +212,7 @@ export default function Home() {
                 </Badge>
                 <div className="mt-6 flex items-baseline justify-center gap-1">
                   <span className="text-5xl font-extrabold tracking-tight text-gray-900">
-                    $99.99
+                    $99
                   </span>
                   <span className="text-xl font-medium text-gray-500">
                     /month

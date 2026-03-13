@@ -39,7 +39,7 @@ export function Footer() {
               Sprint Cargo
             </Link>
             <p className="mt-3 text-sm leading-relaxed text-gray-400 max-w-xs">
-              The fair delivery platform. $99.99/mo for drivers. Zero commission.
+              The fair delivery platform. $99/mo for drivers. Zero commission.
             </p>
           </div>
 

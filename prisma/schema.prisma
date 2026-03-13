@@ -58,7 +58,9 @@ model Driver {
   updatedAt          DateTime  @updatedAt
 
   user       User       @relation(fields: [userId], references: [id], onDelete: Cascade)
+  rateCard   RateCard?
   deliveries Delivery[]
+  quotes     Quote[]
   reviews    Review[]
 
   @@map("drivers")
@@ -69,6 +71,43 @@ enum SubStatus {
   INACTIVE
   PAST_DUE
   CANCELLED
+}
+
+// ─── Rate Card (driver pricing profile) ─────────────────────
+
+model RateCard {
+  id              String   @id @default(cuid())
+  driverId        String   @unique
+  baseRate        Float    // minimum per job ($)
+  perMileRate     Float    // per mile ($)
+
+  // Size surcharges — flat dollar amounts added per size tier
+  surgSmall       Float    @default(0)
+  surgMedium      Float    @default(0)
+  surgLarge       Float    @default(0)
+  surgXL          Float    @default(0)
+  surgXXL         Float    @default(0)
+  surgPallet      Float    @default(0)
+
+  // Weight surcharges — flat dollar amounts per weight tier
+  surgWeightLight     Float @default(0) // under 50 lbs (usually 0)
+  surgWeightMedium    Float @default(0) // 50-150 lbs
+  surgWeightHeavy     Float @default(0) // 150-500 lbs
+  surgWeightExtraHeavy Float @default(0) // 500+ lbs
+
+  // Multi-unit pricing
+  perExtraItem    Float    @default(0) // per additional item beyond 1
+
+  // Speed premiums — added on top for faster delivery
+  premiumSameDay  Float    @default(0)
+  premiumRush     Float    @default(0)
+
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  driver Driver @relation(fields: [driverId], references: [id], onDelete: Cascade)
+
+  @@map("rate_cards")
 }
 
 // ─── Deliveries ─────────────────────────────────────────────
@@ -101,8 +140,11 @@ model Delivery {
   dropoffPhone    String?
   dropoffNotes    String?
   images          String[]
-  price           Float
+  price           Float?         // null until a quote is accepted
   distance        Float?
+  deliverySpeed   DeliverySpeed  @default(STANDARD)
+  estimatedMin    Float?         // lowest auto-quote from available drivers
+  estimatedMax    Float?         // highest auto-quote from available drivers
   status          DeliveryStatus @default(POSTED)
   pickupDate      DateTime?
   pickupTime      String?
@@ -122,10 +164,17 @@ model Delivery {
   createdAt       DateTime       @default(now())
   updatedAt       DateTime       @updatedAt
 
-  customer User @relation("CustomerDeliveries", fields: [customerId], references: [id])
+  customer User     @relation("CustomerDeliveries", fields: [customerId], references: [id])
   driver   Driver?  @relation(fields: [driverId], references: [id])
+  quotes   Quote[]
 
   @@map("deliveries")
+}
+
+enum DeliverySpeed {
+  STANDARD
+  SAME_DAY
+  RUSH
 }
 
 enum PackageSize {
@@ -153,6 +202,48 @@ enum PaymentStatus {
   TRANSFERRED
   REFUNDED
   FAILED
+}
+
+// ─── Quotes (driver bids on deliveries) ─────────────────────
+
+model Quote {
+  id                String      @id @default(cuid())
+  deliveryId        String
+  driverId          String
+  amount            Float       // driver's quoted price
+  autoQuotedAmount  Float       // what rate card calculated (for reference)
+  message           String?     @db.Text // optional note from driver
+  estimatedPickup   String?     // e.g. "Within 2 hours"
+  status            QuoteStatus @default(PENDING)
+
+  // Counter-offer fields (shipper → driver)
+  counterAmount     Float?      // shipper's counter-offer price
+  counterStatus     CounterStatus? // driver's response to counter
+  negotiationRound  Int         @default(1) // 1 or 2, max 2
+
+  createdAt         DateTime    @default(now())
+  updatedAt         DateTime    @updatedAt
+
+  delivery Delivery @relation(fields: [deliveryId], references: [id], onDelete: Cascade)
+  driver   Driver   @relation(fields: [driverId], references: [id], onDelete: Cascade)
+
+  @@unique([deliveryId, driverId]) // one quote per driver per delivery
+  @@map("quotes")
+}
+
+enum QuoteStatus {
+  PENDING    // driver submitted, waiting for shipper
+  ACCEPTED   // shipper accepted this quote
+  DECLINED   // shipper picked someone else or declined
+  COUNTERED  // shipper sent a counter-offer
+  WITHDRAWN  // driver withdrew their quote
+  EXPIRED    // delivery was cancelled or timed out
+}
+
+enum CounterStatus {
+  PENDING    // waiting for driver response
+  ACCEPTED   // driver accepted counter
+  DECLINED   // driver declined counter, holding firm at original
 }
 
 // ─── Reviews ────────────────────────────────────────────────
