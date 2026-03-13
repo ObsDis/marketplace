@@ -50,7 +50,7 @@ export function Navbar() {
       ? "/dashboard/driver"
       : userRole === "ADMIN"
         ? "/dashboard/admin"
-        : "/deliveries/new";
+        : "/dashboard/shipper";
 
   return (
     <nav className="sticky top-0 z-40 w-full border-b bg-white/95 backdrop-blur supports-[backdrop-filter]:bg-white/80 shadow-sm">
@@ -63,15 +63,21 @@ export function Navbar() {
 
         {/* Desktop nav */}
         <div className="hidden items-center gap-1 md:flex">
-          <Button variant="ghost" size="sm" render={<Link href="/marketplace" />}>
-            Browse Deliveries
-          </Button>
-          <Button variant="ghost" size="sm" render={<Link href="/deliveries/new" />}>
-            Post Delivery
-          </Button>
-          <Button variant="ghost" size="sm" render={<Link href="/pricing" />}>
-            Pricing
-          </Button>
+          {userRole !== "CUSTOMER" && (
+            <Button variant="ghost" size="sm" render={<Link href="/marketplace" />}>
+              Browse Deliveries
+            </Button>
+          )}
+          {userRole !== "DRIVER" && !user && (
+            <Button variant="ghost" size="sm" render={<Link href="/deliveries/new" />}>
+              Post Delivery
+            </Button>
+          )}
+          {userRole !== "CUSTOMER" && (
+            <Button variant="ghost" size="sm" render={<Link href="/pricing" />}>
+              Pricing
+            </Button>
+          )}
         </div>
 
         {/* Desktop right side */}
@@ -128,15 +134,21 @@ export function Navbar() {
       >
         <div className="border-t bg-white px-4 pb-4 pt-2">
           <div className="flex flex-col gap-1">
-            <Button variant="ghost" size="sm" className="justify-start" render={<Link href="/marketplace" onClick={() => setMobileOpen(false)} />}>
-              Browse Deliveries
-            </Button>
-            <Button variant="ghost" size="sm" className="justify-start" render={<Link href="/deliveries/new" onClick={() => setMobileOpen(false)} />}>
-              Post Delivery
-            </Button>
-            <Button variant="ghost" size="sm" className="justify-start" render={<Link href="/pricing" onClick={() => setMobileOpen(false)} />}>
-              Pricing
-            </Button>
+            {userRole !== "CUSTOMER" && (
+              <Button variant="ghost" size="sm" className="justify-start" render={<Link href="/marketplace" onClick={() => setMobileOpen(false)} />}>
+                Browse Deliveries
+              </Button>
+            )}
+            {userRole !== "DRIVER" && !user && (
+              <Button variant="ghost" size="sm" className="justify-start" render={<Link href="/deliveries/new" onClick={() => setMobileOpen(false)} />}>
+                Post Delivery
+              </Button>
+            )}
+            {userRole !== "CUSTOMER" && (
+              <Button variant="ghost" size="sm" className="justify-start" render={<Link href="/pricing" onClick={() => setMobileOpen(false)} />}>
+                Pricing
+              </Button>
+            )}
           </div>
 
           <Separator className="my-3" />

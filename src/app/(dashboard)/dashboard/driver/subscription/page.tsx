@@ -1,7 +1,6 @@
 export const dynamic = "force-dynamic";
 
 import { redirect } from "next/navigation";
-import Link from "next/link";
 import { getSession } from "@/lib/auth";
 import { db } from "@/lib/db";
 import { stripe } from "@/lib/stripe";
@@ -10,14 +9,6 @@ import {
   ManageSubscriptionButton,
   UpdatePaymentButton,
 } from "./subscription-actions";
-
-const sidebarLinks = [
-  { href: "/dashboard/driver", label: "Overview" },
-  { href: "/dashboard/driver/deliveries", label: "My Deliveries" },
-  { href: "/marketplace", label: "Available Jobs" },
-  { href: "/dashboard/driver/settings", label: "Settings" },
-  { href: "/dashboard/driver/subscription", label: "Subscription" },
-];
 
 const subStatusColors: Record<string, string> = {
   ACTIVE: "bg-green-100 text-green-700",
@@ -71,7 +62,7 @@ export default async function SubscriptionPage() {
   let currentPeriodEnd: Date | null = null;
   if (driver.subscriptionId && driver.subscriptionStatus === "ACTIVE") {
     try {
-      const sub = await stripe.subscriptions.retrieve(driver.subscriptionId);
+      const sub = await stripe.subscriptions.retrieve(driver.subscriptionId) as unknown as { current_period_end: number };
       currentPeriodEnd = new Date(sub.current_period_end * 1000);
     } catch {
       // If subscription can't be fetched, just skip
@@ -82,33 +73,8 @@ export default async function SubscriptionPage() {
   const status = driver.subscriptionStatus;
 
   return (
-    <div className="min-h-screen bg-gray-50">
-      <div className="mx-auto flex max-w-7xl gap-8 px-4 py-8 sm:px-6 lg:px-8">
-        {/* Sidebar */}
-        <aside className="hidden w-64 flex-shrink-0 lg:block">
-          <nav className="sticky top-8 space-y-1 rounded-xl bg-white p-4 shadow-sm">
-            <div className="mb-4 px-3 text-xs font-semibold uppercase tracking-wider text-gray-400">
-              Driver Dashboard
-            </div>
-            {sidebarLinks.map((link) => (
-              <Link
-                key={link.href}
-                href={link.href}
-                className={`block rounded-lg px-3 py-2 text-sm font-medium transition ${
-                  link.href === "/dashboard/driver/subscription"
-                    ? "bg-orange-50 text-orange-700"
-                    : "text-gray-700 hover:bg-orange-50 hover:text-orange-700"
-                }`}
-              >
-                {link.label}
-              </Link>
-            ))}
-          </nav>
-        </aside>
-
-        {/* Main Content */}
-        <main className="min-w-0 flex-1">
-          <div className="flex items-center justify-between">
+    <div className="space-y-6">
+      <div className="flex items-center justify-between">
             <div>
               <h1 className="text-2xl font-bold text-gray-900">
                 Subscription
@@ -300,8 +266,6 @@ export default async function SubscriptionPage() {
               )}
             </div>
           )}
-        </main>
-      </div>
     </div>
   );
 }

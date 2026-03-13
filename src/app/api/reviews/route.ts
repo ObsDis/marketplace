@@ -2,9 +2,12 @@ import { NextResponse } from "next/server";
 import { z } from "zod";
 import { db } from "@/lib/db";
 import { getSession } from "@/lib/auth";
+import { ReviewDirection } from "@/generated/prisma";
 
 const createReviewSchema = z.object({
+  deliveryId: z.string().min(1, "Delivery ID is required"),
   driverId: z.string().min(1, "Driver ID is required"),
+  direction: z.nativeEnum(ReviewDirection),
   rating: z.number().int().min(1).max(5),
   comment: z.string().optional(),
 });
@@ -19,31 +22,61 @@ export async function POST(request: Request) {
     const body = await request.json();
     const parsed = createReviewSchema.parse(body);
 
-    // Check that the driver exists
-    const driver = await db.driver.findUnique({
-      where: { id: parsed.driverId },
+    // Verify the delivery exists and is completed
+    const delivery = await db.delivery.findUnique({
+      where: { id: parsed.deliveryId },
     });
 
-    if (!driver) {
+    if (!delivery || delivery.status !== "DELIVERED") {
       return NextResponse.json(
-        { error: "Driver not found." },
-        { status: 404 }
+        { error: "Review can only be submitted for completed deliveries." },
+        { status: 400 }
       );
     }
 
-    // Create the review
+    // Verify the reviewer is involved in this delivery
+    const isShipper = delivery.customerId === session.user.id;
+    const driver = session.user.driver;
+    const isDriver = driver && delivery.driverId === driver.id;
+
+    if (!isShipper && !isDriver) {
+      return NextResponse.json(
+        { error: "You are not involved in this delivery." },
+        { status: 403 }
+      );
+    }
+
+    // Verify direction matches role
+    if (isShipper && parsed.direction !== ReviewDirection.SHIPPER_TO_DRIVER) {
+      return NextResponse.json(
+        { error: "Shippers can only submit shipper-to-driver reviews." },
+        { status: 400 }
+      );
+    }
+    if (isDriver && parsed.direction !== ReviewDirection.DRIVER_TO_SHIPPER) {
+      return NextResponse.json(
+        { error: "Drivers can only submit driver-to-shipper reviews." },
+        { status: 400 }
+      );
+    }
+
     const review = await db.review.create({
       data: {
-        userId: session.user.id,
+        deliveryId: parsed.deliveryId,
+        reviewerId: session.user.id,
         driverId: parsed.driverId,
+        direction: parsed.direction,
         rating: parsed.rating,
         comment: parsed.comment,
       },
     });
 
-    // Update driver's average rating
+    // Update driver's average rating (from shipper reviews)
     const { _avg } = await db.review.aggregate({
-      where: { driverId: parsed.driverId },
+      where: {
+        driverId: parsed.driverId,
+        direction: ReviewDirection.SHIPPER_TO_DRIVER,
+      },
       _avg: { rating: true },
     });
 

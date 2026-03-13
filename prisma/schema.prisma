@@ -167,6 +167,7 @@ model Delivery {
   customer User     @relation("CustomerDeliveries", fields: [customerId], references: [id])
   driver   Driver?  @relation(fields: [driverId], references: [id])
   quotes   Quote[]
+  reviews  Review[]
 
   @@map("deliveries")
 }
@@ -246,20 +247,27 @@ enum CounterStatus {
   DECLINED   // driver declined counter, holding firm at original
 }
 
-// ─── Reviews ────────────────────────────────────────────────
+// ─── Reviews (bidirectional) ─────────────────────────────────
 
 model Review {
-  id         String   @id @default(cuid())
-  userId     String
-  driverId   String
-  deliveryId String?
-  rating     Int
-  comment    String?  @db.Text
-  createdAt  DateTime @default(now())
+  id          String          @id @default(cuid())
+  deliveryId  String
+  reviewerId  String          // the user writing the review
+  driverId    String          // the driver involved
+  direction   ReviewDirection // which way the review goes
+  rating      Int             // 1-5
+  comment     String?         @db.Text
+  createdAt   DateTime        @default(now())
 
-  user   User   @relation(fields: [userId], references: [id])
-  driver Driver @relation(fields: [driverId], references: [id], onDelete: Cascade)
+  delivery Delivery @relation(fields: [deliveryId], references: [id], onDelete: Cascade)
+  reviewer User     @relation(fields: [reviewerId], references: [id])
+  driver   Driver   @relation(fields: [driverId], references: [id], onDelete: Cascade)
 
-  @@unique([userId, driverId])
+  @@unique([deliveryId, reviewerId]) // one review per person per delivery
   @@map("reviews")
+}
+
+enum ReviewDirection {
+  SHIPPER_TO_DRIVER // shipper rates driver: performance, communication
+  DRIVER_TO_SHIPPER // driver rates shipper: accuracy, loading, communication
 }
