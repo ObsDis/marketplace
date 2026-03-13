@@ -162,8 +162,9 @@ export async function POST(request: Request) {
     }
 
     console.error("Error creating delivery:", error);
+    const message = error instanceof Error ? error.message : "Failed to create delivery.";
     return NextResponse.json(
-      { error: "Failed to create delivery." },
+      { error: message },
       { status: 500 }
     );
   }
