@@ -4,7 +4,9 @@
 
 import { Resend } from "resend";
 
-const resend = new Resend(process.env.RESEND_API_KEY);
+const resend = process.env.RESEND_API_KEY
+  ? new Resend(process.env.RESEND_API_KEY)
+  : null;
 
 const FROM = "Sprint Cargo <notifications@sprintcargo.com>";
 
@@ -49,6 +51,10 @@ function highlight(label: string, value: string): string {
 // ─── Fire-and-forget send wrapper ─────────────────────────────
 
 function send(to: string | string[], subject: string, html: string): void {
+  if (!resend) {
+    console.warn(`[email] Skipping "${subject}" — RESEND_API_KEY not set`);
+    return;
+  }
   resend.emails
     .send({ from: FROM, to: Array.isArray(to) ? to : [to], subject, html })
     .catch((err) => {
